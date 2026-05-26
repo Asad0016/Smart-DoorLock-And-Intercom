@@ -1,0 +1,3 @@
+00:14:32 | FaceDetection   | [92mINFO[0m    | MainThread                       | ModelTraining initialized | dataset=/home/doorlock/DoorLock/dataset/Naveed encodings=/home/doorlock/DoorLock/dataset/encodings.pickle scaler=1/4
+00:14:32 | FaceDetection   | [92mINFO[0m    | MainThread                       | needs_training=True : encodings.pickle not found
+00:14:32 | FaceDetection   | [91mERROR[0m   | MainThread                       | No images found in dataset: /home/doorlock/DoorLock/dataset/Naveed

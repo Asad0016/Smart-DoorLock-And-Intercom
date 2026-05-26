@@ -20,7 +20,7 @@ class SupabaseManager:
         self.logger = getLogger("SupabaseManager")
 
         if env_file is None:
-            env_file = "/home/doorlock/DoorLock/supabase/credentials.env"
+            env_file = "/home/doorlock/DoorLock/Cloud/credentials.env"
 
         self.logger.info(f"Loading env file from: {env_file}")
         if not load_dotenv(env_file):
@@ -143,70 +143,78 @@ class SupabaseManager:
 
     def import_entire_dataset(self, local_destination_path: str):
         """
-        Recursively scan the DATASET bucket, mirror its folder structure,
-        and download every image file to local_destination_path.
-        Skips .emptyFolderPlaceholder entries.
+        Scans the root bucket folders first, then enters each individual directory
+        to check for new or missing images. Only downloads files that do not
+        exist locally on the system.
         """
         if not self._client:
-            self.logger.error("Supabase client not initialised for dataset import.")
+            self.logger.error("Supabase client not initialized for dataset import.")
             return
 
         base_path = os.path.abspath(local_destination_path)
 
         try:
-            files = self._client.storage.from_(self._dataset_bucket).list(
-                path='', options={"recursive": True}
-            )
-
-            if not files:
-                self.logger.info("Dataset bucket is empty. Nothing to import.")
+            # Step 1: List items at the root level of the bucket
+            root_items = self._client.storage.from_(self._dataset_bucket).list(path='')
+            
+            if not root_items:
+                self.logger.info("Dataset bucket is completely empty.")
                 return
 
-            self.logger.info(f"Found {len(files)} items in dataset bucket.")
+            # Filter out root directories (folder entries lack file ids or end with a slash)
+            folders = [item['name'] for item in root_items if item.get('id') is None or item['name'].endswith('/')]
+            
+            if not folders:
+                folders = [''] # Target root directory if no explicit subfolders are found
 
-            for item in files:
-                file_path = item.get('name', '')
+            self.logger.info(f"Folders found on cloud storage: {folders}")
 
-                # Skip Supabase placeholder entries
-                if '.emptyFolderPlaceholder' in file_path:
+            # Step 2: Traverse inside each identified directory to discover actual files
+            for folder in folders:
+                folder_clean = folder.strip('/')
+                self.logger.info(f"Scanning cloud folder: '{folder_clean}'...")
+                
+                bucket_files = self._client.storage.from_(self._dataset_bucket).list(path=folder_clean)
+                
+                if not bucket_files:
                     continue
 
-                path_parts    = file_path.split("/")
-                is_nested     = len(path_parts) > 1
-                parent_folder = path_parts[0] if is_nested else None
-                file_name     = path_parts[-1]
+                for item in bucket_files:
+                    file_name = item.get('name', '')
+                    
+                    # Ignore directory metadata placeholders
+                    if not file_name or '.emptyFolderPlaceholder' in file_name:
+                        continue
+                    
+                    # Generate structural cloud resource path and target system file path
+                    remote_file_path = f"{folder_clean}/{file_name}" if folder_clean else file_name
+                    final_local_file = os.path.join(base_path, remote_file_path)
 
-                target_dir = os.path.join(base_path, parent_folder) if parent_folder else base_path
-                os.makedirs(target_dir, exist_ok=True)
+                    # Create parent folder structure locally if missing
+                    os.makedirs(os.path.dirname(final_local_file), exist_ok=True)
 
-                if file_path.endswith("/"):
-                    # Pure folder entry — directory already created above
-                    continue
+                    # Verify if the real file exists locally and has non-zero size
+                    if os.path.isfile(final_local_file) and os.path.getsize(final_local_file) > 0:
+                        continue
 
-                final_local_file = os.path.join(target_dir, file_name)
+                    # Fetch valid asset URI for downloading the target file
+                    public_url = self.get_public_url(remote_file_path)
+                    if not public_url:
+                        self.logger.warning(f"Could not resolve URL for resource: {remote_file_path}")
+                        continue
 
-                # Skip files already downloaded (no re-download on every restart)
-                if os.path.exists(final_local_file):
-                    self.logger.info(f"⏭️  Already exists locally, skipping: {final_local_file}")
-                    continue
+                    self.logger.info(f"New image resource detected. Downloading: {remote_file_path}")
+                    res = requests.get(public_url, stream=True, timeout=30)
 
-                public_url = self.get_public_url(file_path)
-                if not public_url:
-                    self.logger.warning(f"Could not get URL for: {file_path}")
-                    continue
+                    if res.status_code == 200:
+                        with open(final_local_file, 'wb') as f:
+                            for chunk in res.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        self.logger.info(f"Successfully saved locally: {remote_file_path}")
+                    else:
+                        self.logger.error(f"Download request failed (HTTP {res.status_code}): {remote_file_path}")
 
-                self.logger.info(f"📥 Downloading: {file_path}")
-                res = requests.get(public_url, stream=True, timeout=30)
-
-                if res.status_code == 200:
-                    with open(final_local_file, 'wb') as f:
-                        for chunk in res.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    self.logger.info(f"✅ Saved: {final_local_file}")
-                else:
-                    self.logger.error(f"❌ Download failed (HTTP {res.status_code}): {file_path}")
-
-            self.logger.info("📦 Dataset import complete.")
+            self.logger.info("Dataset synchronization process complete.")
 
         except Exception as e:
-            self.logger.error(f"Dataset import crashed: {e}")
+            self.logger.error(f"Dataset import sequence encountered an exception: {e}")

@@ -1,0 +1,358 @@
+"""
+camera_manager.py
+
+Professional Camera Manager for Raspberry Pi (Picamera2 based)
+Target: Arducam IMX519 or similar high-res sensors for VeinFinder project
+
+Key Features :
+- Single initialization with hardware check
+- Customizable settings: resolution, framerate, warmup, timeout, output folder
+- Lifecycle: initialize → start/wake → capture (auto wake if sleeping) → auto sleep after capture
+- Flow: Init camera once → On capture call: wake (start if needed) → capture image → sleep (stop but keep init)
+- Generate path for images (date folder + timestamp)
+- Setters for all params (driver-like)
+- Logging, error handling
+- Optimized: Sleep instead of full stop for quick next capture
+
+Requirements:
+- pip install picamera2
+- libcamera installed on RPi
+"""
+
+import os
+import time
+import numpy as np
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, Tuple
+import threading  # For thread-safety
+
+from picamera2 import Picamera2  # Main library for camera control
+from logs.logger import getLogger  # Your custom logger
+
+class CameraManager:
+    def __init__(
+        self,
+        resolution=(1920, 1080),
+        framerate=30,
+        output_folder='/home/doorlock/DoorLock/videos',
+        warmup_ms=2000,
+        timeout_s=5,
+        preview_resolution=(640, 480)
+    ):
+        self.resolution = resolution
+        self.framerate = framerate
+        self.output_folder = output_folder
+        self.warmup_ms = warmup_ms
+        self.timeout_s = timeout_s
+        self.preview_resolution = preview_resolution
+
+        self.picam2 = None
+        self.still_config = None
+        self.preview_config = None
+        self.current_config = None
+        self.isrunning = False
+        self._is_sleeping = False
+        self._lock = threading.RLock()  # Changed to RLock (reentrant lock) to prevent deadlock
+        self.streaming = False
+        self.paused = False
+
+        os.makedirs(output_folder, exist_ok=True)
+        self.logger = getLogger('CameraManager')
+        self.logger.info("CameraManager initialized")
+
+    # ==================== LIFECYCLE METHODS ====================
+
+    def initialize_camera(self) -> bool:
+        """One-time camera init with connection check"""
+        self.logger.info("Initializing camera...")
+
+        if not self._isCameraConnected():
+            self.logger.error("Camera not connected or faulty!")
+            return False
+
+        try:
+            self.picam2 = Picamera2()
+            self.still_config = self.picam2.create_still_configuration(
+                main={"size": self.resolution},
+                controls={"FrameRate": self.framerate} if self.framerate else {}
+            )
+            self.preview_config = self.picam2.create_video_configuration(
+                main={"size": self.preview_resolution},
+                controls={"FrameRate": self.framerate} if self.framerate else {}
+            )
+            self.current_config = self.still_config
+            self.logger.info(f"Camera initialized: still {self.resolution} @ {self.framerate}fps, preview {self.preview_resolution}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Camera init failed: {e}")
+            self.picam2 = None
+            return False
+
+    def wake(self) -> bool:
+        """Wake from sleep: Equivalent to start_camera if sleeping"""
+        with self._lock:
+            if self.isrunning:
+                self.logger.debug("Camera already awake/running")
+                return True
+
+            try:
+                if self.picam2 is None:
+                    if not self.initialize_camera():
+                        return False
+                        
+                self.picam2.configure(self.current_config)
+                self.picam2.start()
+                time.sleep(self.warmup_ms / 1000.0)
+                self.isrunning = True
+                self._is_sleeping = False
+                self.logger.info("Camera woken up/started")
+                return True
+            except Exception as e:
+                self.logger.error(f"Wake/start failed: {e}")
+                return False
+
+    def sleep(self) -> bool:
+        """Put to sleep: Equivalent to stop_camera but keep picam2 object for quick wake"""
+        with self._lock:
+            if not self.isrunning:
+                self.logger.debug("Camera already sleeping/stopped")
+                return True
+
+            try:
+                self.picam2.stop()
+                self.isrunning = False
+                self._is_sleeping = True
+                self.logger.info("Camera put to sleep (ready for quick wake)")
+                return True
+            except Exception as e:
+                self.logger.error(f"Sleep/stop error: {e}")
+                return False
+
+    def stop_camera(self) -> bool:
+        """Full stop: Sleep first, then close (use for final cleanup)"""
+        self.sleep()
+        if self.picam2:
+            try:
+                self.picam2.close()
+                self.picam2 = None
+                self.logger.info("Camera fully stopped")
+                return True
+            except Exception as e:
+                self.logger.error(f"Full stop error: {e}")
+                return False
+        return True
+
+    def cleanup(self) -> None:
+        self.stop_preview_stream()
+        self.stop_camera()
+        self.logger.info("Camera cleanup complete")
+
+    # ==================== CAPTURE METHODS ====================
+
+    def capture_image(
+        self,
+        filename_prefix: str = "capture",
+        subfolder: Optional[str] = None
+    ) -> Optional[Path]:
+        """Capture flow: Auto wake → Capture → Auto sleep"""
+        with self._lock:
+            was_streaming = self.streaming
+            if was_streaming:
+                self.logger.debug("Pausing streaming for capture")
+                self.paused = True
+                time.sleep(0.1)  # Brief pause to let stream stabilize
+
+        if not self.wake():
+            self.logger.error("Capture aborted: Wake failed")
+            if was_streaming:
+                self.paused = False
+            return None
+
+        try:
+            # Switch to still config for high-res capture
+            with self._lock:
+                old_config = self.current_config
+                self.current_config = self.still_config
+                
+                # Reconfigure for still capture
+                if self.isrunning:
+                    self.picam2.stop()
+                    self.picam2.configure(self.still_config)
+                    self.picam2.start()
+                    time.sleep(0.5)  # Let camera adjust
+
+            path = self._generate_image_path(filename_prefix, subfolder)
+            self.logger.info(f"Capturing image to {path}")
+
+            start_time = time.time()
+            self.picam2.capture_file(str(path))
+            duration = time.time() - start_time
+
+            if duration > self.timeout_s:
+                raise TimeoutError("Capture timed out")
+
+            self.logger.info(f"Image captured in {duration:.2f}s: {path}")
+
+            # Resume streaming if it was active
+            if was_streaming:
+                with self._lock:
+                    self.logger.debug("Resuming streaming after capture")
+                    self.current_config = self.preview_config
+                    self.picam2.stop()
+                    self.picam2.configure(self.preview_config)
+                    self.picam2.start()
+                    time.sleep(0.3)
+                    self.paused = False
+            else:
+                self.sleep()
+
+            return path
+            
+        except Exception as e:
+            self.logger.error(f"Capture failed: {e}")
+            if was_streaming:
+                self.paused = False
+            else:
+                self.sleep()
+            return None
+    
+    def start_preview_stream(self, fps: float = 15.0) -> None:
+        """Start preview streaming without deadlock"""
+        with self._lock:
+            if self.streaming:
+                self.logger.debug("Preview already streaming")
+                return
+
+            self.current_config = self.preview_config
+            
+            # Wake camera if needed (RLock allows reentrant locking)
+            if not self.isrunning:
+                if self.picam2 is None:
+                    if not self.initialize_camera():
+                        self.logger.error("Cannot start preview - initialization failed")
+                        return
+                        
+                try:
+                    self.picam2.configure(self.preview_config)
+                    self.picam2.start()
+                    time.sleep(self.warmup_ms / 1000.0)
+                    self.isrunning = True
+                    self._is_sleeping = False
+                    self.logger.info("Camera started for preview")
+                except Exception as e:
+                    self.logger.error(f"Failed to start camera for preview: {e}")
+                    return
+
+            self.streaming = True
+            self.paused = False
+            self.logger.info(f"Preview streaming started @ ~{fps} fps")
+
+    def stop_preview_stream(self) -> None:
+        """Stop preview streaming"""
+        with self._lock:
+            if not self.streaming:
+                self.logger.debug("Preview not streaming")
+                return
+                
+            self.streaming = False
+            self.paused = True
+            self.logger.info("Preview streaming stopped")
+            
+            # Sleep the camera
+            if self.isrunning:
+                try:
+                    self.picam2.stop()
+                    self.isrunning = False
+                    self._is_sleeping = True
+                    self.logger.info("Camera put to sleep after streaming")
+                except Exception as e:
+                    self.logger.error(f"Error stopping camera: {e}")
+
+    def get_next_frame(self) -> Optional[np.ndarray]:
+        """Get next frame from preview stream"""
+        with self._lock:
+            if not self.streaming or self.paused or not self.isrunning:
+                return None
+
+            try:
+                return self.picam2.capture_array()  # shape: (height, width, 3) RGB
+            except Exception as e:
+                self.logger.error(f"Failed to capture frame: {e}")
+                return None
+
+    def pause_stream(self):
+        """Pause stream without stopping camera"""
+        with self._lock:
+            self.paused = True
+            self.logger.debug("Stream paused")
+
+    def resume_stream(self):
+        """Resume paused stream"""
+        with self._lock:
+            self.paused = False
+            self.logger.debug("Stream resumed")
+
+    # ==================== SETTERS (DRIVER-LIKE CUSTOMIZATION) ====================
+
+    def set_resolution(self, resolution: Tuple[int, int]) -> bool:
+        """Set still capture resolution"""
+        if self.isrunning:
+            self.logger.warning("Cannot change resolution while running")
+            return False
+        self.resolution = resolution
+        self.logger.info(f"Resolution set to {resolution}")
+        if self.picam2:
+            self.still_config = self.picam2.create_still_configuration(
+                main={"size": self.resolution}
+            )
+        return True
+
+    def set_framerate(self, framerate: int) -> bool:
+        """Set framerate"""
+        self.framerate = framerate
+        self.logger.info(f"Framerate set to {framerate}")
+        if self.picam2 and self.isrunning:
+            try:
+                self.picam2.controls.FrameRate = framerate
+            except Exception as e:
+                self.logger.warning(f"Could not set framerate: {e}")
+        return True
+
+    def set_warmup_ms(self, ms: int) -> bool:
+        """Set warmup time in milliseconds"""
+        self.warmup_ms = ms
+        self.logger.info(f"Warmup set to {ms}ms")
+        return True
+
+    def set_timeout_s(self, seconds: int) -> bool:
+        """Set capture timeout in seconds"""
+        self.timeout_s = seconds
+        self.logger.info(f"Timeout set to {seconds}s")
+        return True
+
+    # ==================== HELPERS ====================
+
+    def _isCameraConnected(self) -> bool:
+        """Check if camera is connected and working"""
+        try:
+            test_cam = Picamera2()
+            test_cam.start()
+            time.sleep(0.5)
+            test_cam.capture_array()
+            test_cam.stop()
+            test_cam.close()
+            return True
+        except Exception as e:
+            self.logger.error(f"Camera connection failed: {e}")
+            return False
+
+    def _generate_image_path(self, prefix: str, subfolder: Optional[str] = None) -> Path:
+        """Generate structured path for images (date folder + timestamp)"""
+        now = datetime.now()
+        date_folder = now.strftime("%Y%m%d")
+        dir_path = Path(self.output_folder) / (subfolder or date_folder)
+        dir_path.mkdir(parents=True, exist_ok=True)
+        timestamp = now.strftime("%Y%m%d_%H%M%S")
+        filename = f"{prefix}_{timestamp}.jpg"
+        return dir_path / filename

@@ -1,0 +1,4 @@
+14:21:17 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+14:21:17 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+14:22:57 | SupabaseManager | [92mINFO[0m    | MainThread                       | ✅ File uploaded successfully: tmplyusxydd.mp4
+14:22:57 | SupabaseManager | [92mINFO[0m    | MainThread                       | Public URL generated for tmplyusxydd.mp4

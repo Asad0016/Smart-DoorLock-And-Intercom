@@ -1,210 +1,53 @@
-# """
-# main.py - Face Recognition Door Lock System
-# Fixed Version - Press 's' to record, upload directly to Supabase
-# """
-
-# import time
-# import cv2
-# import os
-# import tempfile
-
-# from Hardware.camera import CameraManager
-# from software.FaceDetection import ModelTraining
-# from Cloud.supabase import SupabaseManager
-
-# # ========================= CONFIG =========================
-# DATASET_PATH    = "/home/doorlock/DoorLock/dataset/Naveed"
-# ENCODINGS_PATH  = "/home/doorlock/DoorLock/dataset/encodings.pickle"
-# DETECTION_MODEL = "hog"
-# ENCODING_MODEL  = "large"
-# TOLERANCE       = 0.5
-
-# CAMERA_RESOLUTION         = (1920, 1080)
-# CAMERA_PREVIEW_RESOLUTION = (640, 480)
-# CAMERA_FPS                = 30
-# RECORDING_DURATION        = 10      # seconds
-# RECORDING_FPS             = 20
-
-# # ========================= MAIN =========================
-# def main():
-#     # 1. Face Model
-#     print("[INFO] Loading Face Recognition Model...")
-#     model = ModelTraining(
-#         dataset_path=DATASET_PATH,
-#         encodings_path=ENCODINGS_PATH,
-#         detection_model=DETECTION_MODEL,
-#         encoding_model=ENCODING_MODEL,
-#         tolerance=TOLERANCE,
-#     )
-#     model.train_model()
-
-#     # 2. Camera
-#     print("[INFO] Initializing Camera...")
-#     camera = CameraManager(
-#         resolution=CAMERA_RESOLUTION,
-#         framerate=CAMERA_FPS,
-#         preview_resolution=CAMERA_PREVIEW_RESOLUTION,
-#     )
-
-#     if not camera.initialize_camera():
-#         print("[ERROR] Camera failed to initialize!")
-#         return
-
-#     camera.start_preview_stream(fps=CAMERA_FPS)
-
-#     # 3. Supabase
-#     storage = None
-#     try:
-#         storage = SupabaseManager()
-#         print("[INFO] Supabase Connected Successfully")
-#     except Exception as e:
-#         print(f"[WARNING] Supabase Failed: {e}")
-
-#     print("\n[INFO] System Ready!")
-#     print("   Press 's' → Start 10s Recording (uploads to Supabase)")
-#     print("   Press 'q' → Quit\n")
-
-#     # Recording state
-#     recording        = False
-#     video_writer     = None
-#     temp_video_path  = None
-#     record_start_time = None
-
-#     try:
-#         while True:
-#             # --- Get frame ---
-#             frame = camera.get_next_frame()
-#             if frame is None:
-#                 time.sleep(0.01)
-#                 continue
-
-#             # Convert BGRA → BGR if needed
-#             if frame.ndim == 3 and frame.shape[2] == 4:
-#                 frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-
-#             # --- Face processing ---
-#             frame = model.process_frame(frame)
-#             frame = model.draw_results(frame)
-#             detected_names = model.get_detected_names()
-
-#             # --- Status overlay ---
-#             if recording:
-#                 elapsed  = time.time() - record_start_time
-#                 remaining = max(0, RECORDING_DURATION - elapsed)
-#                 status_text  = f"RECORDING  {remaining:.1f}s left"
-#                 status_color = (0, 0, 255)
-#             else:
-#                 status_text  = "Monitoring  |  press S to record"
-#                 status_color = (0, 255, 0)
-
-#             cv2.putText(frame, status_text, (10, 30),
-#                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, status_color, 2)
-
-#             # --- Show frame FIRST so waitKey works reliably ---
-#             cv2.imshow("Face Recognition Door Lock", frame)
-#             key = cv2.waitKey(1) & 0xFF
-
-#             # --- Quit ---
-#             if key == ord('q'):
-#                 print("[INFO] Quitting...")
-#                 break
-
-#             # ================== START RECORDING ==================
-#             # Press 's' → always start recording (no Unknown check)
-#             if key in (ord('s'), ord('S')) and not recording:
-#                 print("[INFO] 's' pressed → Starting 10s Recording...")
-
-#                 with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
-#                     temp_video_path = tmp.name
-
-#                 fourcc       = cv2.VideoWriter_fourcc(*'mp4v')
-#                 video_writer = cv2.VideoWriter(
-#                     temp_video_path, fourcc, RECORDING_FPS, CAMERA_PREVIEW_RESOLUTION
-#                 )
-#                 recording         = True
-#                 record_start_time = time.time()
-
-#             # ================== WRITE & STOP RECORDING ==================
-#             if recording:
-#                 video_writer.write(frame)
-#                 elapsed = time.time() - record_start_time
-
-#                 if elapsed >= RECORDING_DURATION:
-#                     print("[INFO] 10s complete → Releasing video writer...")
-#                     video_writer.release()
-#                     video_writer = None
-#                     recording    = False
-
-#                     # Upload to Supabase
-#                     if storage and temp_video_path and os.path.exists(temp_video_path):
-#                         print("[INFO] Uploading to Supabase...")
-#                         try:
-#                             url = storage.upload_and_get_url(temp_video_path)
-#                             if url:
-#                                 print(f"[SUCCESS] Upload complete!")
-#                                 print(f"Link: {url}")
-#                             else:
-#                                 print("[ERROR] Upload returned no URL.")
-#                         except Exception as e:
-#                             print(f"[ERROR] Upload failed: {e}")
-#                     else:
-#                         if not storage:
-#                             print("[WARNING] Supabase not connected – video NOT uploaded.")
-#                         else:
-#                             print("[WARNING] Temp file missing – nothing to upload.")
-
-#                     # Clean up temp file
-#                     if temp_video_path and os.path.exists(temp_video_path):
-#                         os.remove(temp_video_path)
-#                     temp_video_path = None
-
-#     except KeyboardInterrupt:
-#         print("\n[INFO] Interrupted by user.")
-#     finally:
-#         if video_writer:
-#             video_writer.release()
-#         if temp_video_path and os.path.exists(temp_video_path):
-#             os.remove(temp_video_path)
-#         cv2.destroyAllWindows()
-#         camera.cleanup()
-#         print("[INFO] System Shutdown Complete.")
-
-
-# if __name__ == "__main__":
-#     main()
 """
-main.py - Face Recognition Door Lock System
-==========================================
-Startup Flow:
-  1. Connect to Supabase Cloud → import full dataset
-  2. Smart-train: hash the dataset; skip if unchanged, retrain if new data found
-  3. Launch Flask webhook listener (background thread) for Supabase Edge Function alerts
-  4. Run live camera loop with face recognition + press-S recording
+main.py - Face Recognition Door Lock System (Updated & Refactored)
 
-Webhook Secret (Supabase Dashboard → MY_RPI_SECRET): DoorLock123
+Key behaviour:
+  • Smart-train: only retrains when encodings.pickle is missing/empty
+    OR the dataset folder contents actually changed (hash mismatch).
+    Startup with an unchanged dataset → NO retrain.
+
+  • Motion detected → camera starts → recording begins IMMEDIATELY.
+  • While recording:
+      - Known face OR RFID authorised  → abort clip, delete temp file, sleep camera.
+      - Full RECORDING_DURATION elapsed with NO authorised person → upload clip
+        to Supabase, delete local copy, sleep camera, wait for next motion.
 """
 
 import hashlib
 import json
 import os
-import pickle
 import tempfile
 import threading
 import time
-
 import cv2
-from flask import Flask, jsonify, request
+
+# Environmental control variables parsing library
+from dotenv import load_dotenv
 
 from Cloud.AlertManager import AlertManager
 from Cloud.supabase import SupabaseManager
 from Hardware.camera import CameraManager
+from Hardware.rfid import RFIDManager
+from Hardware.MotionSensor import PIRSENSOR
 from logs.logger import getLogger
 from software.FaceDetection import ModelTraining
+
+# Imported cleanly from your new decoupled module
+from Cloud.webhook import start_webhook_server
+
+# ── Load Configuration from Environment File ─────────────────
+# Path layout context parsing configuration variables
+env_path = "/home/doorlock/DoorLock/Cloud/credential.env"
+load_dotenv(dotenv_path=env_path)
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://qiyqwbkuknogegycahqm.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_jYBUpnRA1U2PWu_ssvOvMA_sumfxMy8")
 
 # ─────────────────────────── CONFIG ───────────────────────────
 DATASET_PATH        = "/home/doorlock/DoorLock/dataset"
 ENCODINGS_PATH      = "/home/doorlock/DoorLock/dataset/encodings.pickle"
 DATASET_HASH_PATH   = "/home/doorlock/DoorLock/dataset/.dataset_hash.json"
+
 DETECTION_MODEL     = "hog"
 ENCODING_MODEL      = "large"
 TOLERANCE           = 0.5
@@ -212,8 +55,10 @@ TOLERANCE           = 0.5
 CAMERA_RESOLUTION         = (1920, 1080)
 CAMERA_PREVIEW_RESOLUTION = (640, 480)
 CAMERA_FPS                = 30
-RECORDING_DURATION        = 10   # seconds
+RECORDING_DURATION        = 10   # seconds of footage before uploading
 RECORDING_FPS             = 20
+
+CAMERA_IDLE_TIMEOUT       = 8    # seconds of no motion before sleeping camera
 
 WEBHOOK_SECRET      = "DoorLock123"
 WEBHOOK_HOST        = "0.0.0.0"
@@ -223,31 +68,41 @@ logger = getLogger("Main")
 
 
 # ══════════════════════════════════════════════════════════════
-#  DATASET FINGERPRINTING  (detect new folders / images)
+#  DATASET HASH  — content-based, immune to mtime/copy changes
 # ══════════════════════════════════════════════════════════════
+
+_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
+
 
 def compute_dataset_hash(dataset_path: str) -> str:
     """
-    Walk the dataset directory and build a stable SHA-256 fingerprint
-    that covers every file path + its size + last-modified time.
-    Returns a hex digest string.
+    SHA-256 built from:
+      • The relative file path  (catches renames / new files)
+      • The SHA-256 of the file's actual bytes  (catches content changes)
     """
-    hasher = hashlib.sha256()
+    outer = hashlib.sha256()
     for root, dirs, files in sorted(os.walk(dataset_path)):
-        dirs.sort()   # ensure deterministic traversal order
+        dirs.sort()
         for fname in sorted(files):
-            if fname.startswith("."):   # skip hidden housekeeping files
-                continue
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in _IMAGE_EXTENSIONS:
+                continue                      # skip pickle, json, hidden files, etc.
             full = os.path.join(root, fname)
             rel  = os.path.relpath(full, dataset_path)
-            stat = os.stat(full)
-            # include relative path, size, and modification time in the hash
-            hasher.update(f"{rel}|{stat.st_size}|{stat.st_mtime}".encode())
-    return hasher.hexdigest()
+
+            # Hash the actual file contents
+            inner = hashlib.sha256()
+            with open(full, "rb") as fh:
+                for chunk in iter(lambda: fh.read(65536), b""):
+                    inner.update(chunk)
+
+            # Contribute  "relative/path → content_hash"  to the outer digest
+            outer.update(f"{rel}={inner.hexdigest()}\n".encode())
+
+    return outer.hexdigest()
 
 
 def load_saved_hash() -> str | None:
-    """Load the previously persisted dataset hash (None if first run)."""
     if os.path.exists(DATASET_HASH_PATH):
         try:
             with open(DATASET_HASH_PATH, "r") as f:
@@ -257,138 +112,208 @@ def load_saved_hash() -> str | None:
     return None
 
 
-def save_dataset_hash(digest: str):
-    """Persist the current dataset hash to disk."""
+def save_dataset_hash(digest: str) -> None:
     os.makedirs(os.path.dirname(DATASET_HASH_PATH), exist_ok=True)
     with open(DATASET_HASH_PATH, "w") as f:
         json.dump({"hash": digest, "timestamp": time.time()}, f)
 
 
 # ══════════════════════════════════════════════════════════════
-#  SMART TRAINING  (skip if dataset hasn't changed)
+#  SMART TRAINING
 # ══════════════════════════════════════════════════════════════
 
 def smart_train(model: ModelTraining, force: bool = False) -> bool:
-    """
-    Compute a fingerprint of the dataset directory.
-    - If the fingerprint matches the last saved one AND encodings exist → skip.
-    - Otherwise → train and save the new fingerprint.
-    Returns True if training was performed, False if it was skipped.
-    """
     current_hash = compute_dataset_hash(DATASET_PATH)
     saved_hash   = load_saved_hash()
-    encodings_ok = os.path.exists(ENCODINGS_PATH) and os.path.getsize(ENCODINGS_PATH) > 0
+    encodings_ok = (
+        os.path.exists(ENCODINGS_PATH)
+        and os.path.getsize(ENCODINGS_PATH) > 0
+    )
 
     if not force and encodings_ok and current_hash == saved_hash:
-        logger.info("✅ Dataset unchanged and encodings present → skipping training.")
-        return False
+        logger.info("Smart-train: Hashes match perfectly. Loading encodings into RAM.")
+        return model._load_encodings()
 
-    reason = "forced" if force else ("no encodings" if not encodings_ok else "dataset changed")
-    logger.info(f"🔄 Training model [{reason}] ...")
-    model.train_model()
-    save_dataset_hash(current_hash)
-    logger.info("✅ Model training complete. Hash saved.")
-    return True
-
-
-# ══════════════════════════════════════════════════════════════
-#  WEBHOOK SERVER  (Flask in a background thread)
-# ══════════════════════════════════════════════════════════════
-
-def build_webhook_app(alert_mgr: AlertManager, model: ModelTraining) -> Flask:
-    """
-    Construct and return the Flask app that handles Supabase Edge Function
-    webhook calls.  Two routes are registered:
-
-      POST /webhook/face-sync     → new image / new folder uploaded to storage
-      POST /webhook/intruder      → security / lockdown trigger
-    """
-    app = Flask(__name__)
-
-    # ── Silence Flask's noisy access log in the console ──────────
-    import logging as _logging
-    _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
-
-    # ── /webhook/face-sync ────────────────────────────────────────
-    @app.route("/webhook/face-sync", methods=["POST"])
-    def face_sync():
-        incoming_secret = request.headers.get("X-Webhook-Secret", "")
-
-        if not alert_mgr.verify_alert_auth(incoming_secret):
-            logger.warning("🚫 Rejected webhook: invalid or missing secret.")
-            return jsonify({"error": "Unauthorized"}), 401
-
-        data = request.get_json(silent=True) or {}
-        result, status_code = alert_mgr.handle_new_face_sync(data)
-
-        # ── Retrain only when a new image (not just a folder) arrived ──
-        if status_code == 200 and not (
-            data.get("event_type") == "new_folder_only"
-            or str(data.get("file_path", "")).endswith("/")
-        ):
-            logger.info("📸 New image synced → triggering smart retrain …")
-            threading.Thread(
-                target=smart_train,
-                kwargs={"model": model, "force": False},
-                daemon=True,
-            ).start()
-
-        return jsonify(result), status_code
-
-    # ── /webhook/intruder ─────────────────────────────────────────
-    @app.route("/webhook/intruder", methods=["POST"])
-    def intruder_alert():
-        incoming_secret = request.headers.get("X-Webhook-Secret", "")
-
-        if not alert_mgr.verify_alert_auth(incoming_secret):
-            logger.warning("🚫 Rejected intruder webhook: invalid or missing secret.")
-            return jsonify({"error": "Unauthorized"}), 401
-
-        data   = request.get_json(silent=True) or {}
-        result, status_code = alert_mgr.handle_intruder_alert(data)
-        return jsonify(result), status_code
-
-    return app
-
-
-def start_webhook_server(alert_mgr: AlertManager, model: ModelTraining):
-    """Launch the Flask webhook listener in a daemon thread."""
-    app = build_webhook_app(alert_mgr, model)
-    thread = threading.Thread(
-        target=lambda: app.run(host=WEBHOOK_HOST, port=WEBHOOK_PORT, use_reloader=False),
-        daemon=True,
-        name="WebhookServer",
-    )
-    thread.start()
-    logger.info(f"🌐 Webhook server listening on {WEBHOOK_HOST}:{WEBHOOK_PORT}")
+    reason = "Forced retrain" if force else ("Missing encodings" if not encodings_ok else "Dataset modification detected")
+    logger.info(f"Smart-train: Starting training [{reason}] …")
+    
+    success = model.train_model(force=True, current_hash=current_hash)
+    return success
 
 
 # ══════════════════════════════════════════════════════════════
-#  MAIN
+#  SHARED STATE  (thread-safe)
+# ══════════════════════════════════════════════════════════════
+
+class DoorLockState:
+    def __init__(self):
+        self._lock         = threading.Lock()
+        self.authorized    = False
+        self.motion_active = False
+        self.motion_locked = False
+        self.camera_ready  = False
+
+    def set_authorized(self, value: bool) -> None:
+        with self._lock:
+            self.authorized = value
+
+    def consume_authorized(self) -> bool:
+        with self._lock:
+            val = self.authorized
+            self.authorized = False
+            return val
+
+    def set_motion(self, value: bool) -> None:
+        with self._lock:
+            self.motion_active = value
+
+    def is_motion(self) -> bool:
+        with self._lock:
+            if self.motion_locked:
+                return False
+            return self.motion_active
+
+    def lock_motion(self) -> None:
+        with self._lock:
+            self.motion_locked = True
+        logger.info("Motion gate LOCKED — PIR ignored until record/upload cycle completes.")
+
+    def unlock_motion(self) -> None:
+        with self._lock:
+            self.motion_locked = False
+            self.camera_ready  = False
+        logger.info("Motion gate UNLOCKED — PIR active, system ready for next event.")
+
+    def mark_camera_ready(self) -> None:
+        with self._lock:
+            self.camera_ready = True
+
+    def is_camera_ready(self) -> bool:
+        with self._lock:
+            return self.camera_ready
+
+    def reset_camera_ready(self) -> None:
+        with self._lock:
+            self.camera_ready = False
+
+
+# ══════════════════════════════════════════════════════════════
+#  BACKGROUND SENSOR THREAD  (PIR + RFID)
+# ══════════════════════════════════════════════════════════════
+
+def sensor_polling_thread(pir: PIRSENSOR, rfid: RFIDManager, state: DoorLockState) -> None:
+    logger.info("Sensor polling thread started (PIR + RFID, 100 ms interval).")
+    rfid_available = rfid.reader is not None
+    if not rfid_available:
+        logger.warning("Sensor thread: RFID reader unavailable — PIR + face recognition active.")
+        
+    while True:
+        state.set_motion(pir.is_motion_active())
+
+        if rfid_available:
+            try:
+                if rfid.is_authorized_card():
+                    logger.info("RFID: authorised card tapped → flagging state.")
+                    state.set_authorized(True)
+            except Exception as e:
+                logger.debug(f"RFID poll error (non-fatal): {e}")
+
+        time.sleep(0.1)
+
+
+# ══════════════════════════════════════════════════════════════
+#  CAMERA STARTUP THREAD
+# ══════════════════════════════════════════════════════════════
+
+def camera_startup_thread(camera: CameraManager, state: DoorLockState) -> None:
+    logger.info("Camera startup thread: starting preview stream …")
+    camera.start_preview_stream(fps=CAMERA_FPS)
+
+    for _ in range(100):
+        frame = camera.get_next_frame()
+        if frame is not None:
+            state.mark_camera_ready()
+            logger.info("Camera startup thread: first frame received — camera is ready.")
+            return
+        time.sleep(0.05)
+
+    state.mark_camera_ready()
+    logger.warning("Camera startup thread: timed out waiting for first frame.")
+
+
+# ══════════════════════════════════════════════════════════════
+#  UPLOAD & CLEANUP
+# ═══════════════════════════════════════════════════════════
+
+def upload_and_cleanup(
+    storage: SupabaseManager | None,
+    video_path: str,
+    state: DoorLockState,
+) -> None:
+    try:
+        if storage and video_path and os.path.exists(video_path):
+            logger.info("Uploading intruder clip to Supabase …")
+            try:
+                url = storage.upload_and_get_url(video_path)
+                if url:
+                    logger.info(f"Upload complete. Public link: {url}")
+                else:
+                    logger.error("Upload returned no URL.")
+            except Exception as e:
+                logger.error(f"Upload failed: {e}")
+        else:
+            if not storage:
+                logger.warning("Supabase not connected — clip NOT uploaded.")
+            else:
+                logger.warning("Temp video path missing — nothing to upload.")
+    finally:
+        if video_path and os.path.exists(video_path):
+            os.remove(video_path)
+            logger.info("Local clip deleted from RPi storage.")
+        state.unlock_motion()
+
+
+# ══════════════════════════════════════════════════════════════
+#  HELPERS
+# ══════════════════════════════════════════════════════════════
+
+def _sleep_camera(camera: CameraManager, state: DoorLockState) -> dict:
+    camera.stop_preview_stream()
+    state.reset_camera_ready()
+    logger.info("Camera sleeping — waiting for next motion event.")
+    return {
+        "camera_active":     False,
+        "camera_starting":   False,
+        "first_frame_time":  None,
+        "last_motion_time":  None,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+#  MAIN EXECUTION CONTEXT
 # ══════════════════════════════════════════════════════════════
 
 def main():
-
-    # ── 1. Cloud: connect to Supabase ────────────────────────────
-    logger.info("☁️  Connecting to Supabase …")
+    # ── 1. Supabase Initialization ────────────────────────────
+    logger.info("Connecting to Supabase …")
     storage = None
     try:
         storage = SupabaseManager()
-        logger.info("✅ Supabase connected.")
+        logger.info("Supabase connected.")
     except Exception as e:
-        logger.warning(f"⚠️  Supabase unavailable: {e}. Continuing offline.")
+        logger.warning(f"Supabase unavailable: {e}  →  continuing offline.")
 
-    # ── 2. Cloud: pull full dataset to local disk ─────────────────
+    # ── 2. Sync Cloud Assets ──────────────────────────────────
     if storage:
-        logger.info("📦 Importing dataset from cloud bucket …")
+        logger.info("Importing dataset from cloud bucket …")
         try:
             storage.import_entire_dataset(DATASET_PATH)
-            logger.info("✅ Dataset import complete.")
+            logger.info("Dataset import complete.")
         except Exception as e:
-            logger.error(f"❌ Dataset import failed: {e}")
+            logger.error(f"Dataset import failed: {e}")
 
-    # ── 3. Face model: smart-train (skip if unchanged) ────────────
-    logger.info("🧠 Initialising Face Recognition model …")
+    # ── 3. Face Model Setup ───────────────────────────────────
+    logger.info("Initialising Face Recognition model …")
     model = ModelTraining(
         dataset_path    = DATASET_PATH,
         encodings_path  = ENCODINGS_PATH,
@@ -397,131 +322,257 @@ def main():
         tolerance       = TOLERANCE,
     )
 
-    # Check whether the dataset has any images at all before attempting training
+    # ── 4. Structural Verification & Boot Training ───────────
     dataset_has_images = any(
-        fname.lower().endswith((".jpg", ".jpeg", ".png"))
+        os.path.splitext(fname)[1].lower() in _IMAGE_EXTENSIONS
         for _, _, files in os.walk(DATASET_PATH)
         for fname in files
     )
 
     if dataset_has_images:
-        smart_train(model, force=False)
+        current_hash = compute_dataset_hash(DATASET_PATH)
+        encodings_exist = os.path.exists(ENCODINGS_PATH) and os.path.getsize(ENCODINGS_PATH) > 0
+        saved_hash = load_saved_hash()
+        if encodings_exist and saved_hash is None:
+            logger.info("Found existing encodings but no hash file. Creating hash to prevent false retraining.")
+            save_dataset_hash(current_hash)
+        smart_train(model, force=False)  
     else:
-        logger.warning("⚠️  Dataset appears empty — skipping training until images arrive.")
+        logger.warning(
+            "Dataset directory contains no images — skipping training. "
+            "Training will trigger automatically when the first image arrives via webhook."
+        )
 
-    # ── 4. AlertManager + Webhook server ─────────────────────────
+    # ── 5. Modularized Webhook Server Bootstrap ───────────────
+    # 💡 UPDATED: Initializing alert_mgr with dynamic credentials read from .env
     alert_mgr = AlertManager(
         base_storage_path = DATASET_PATH,
         secret_key        = WEBHOOK_SECRET,
+        supabase_url      = SUPABASE_URL,
+        supabase_key      = SUPABASE_KEY
     )
-    start_webhook_server(alert_mgr, model)
+    
+    # Handing over runtime dependencies securely to webhook.py
+    start_webhook_server(
+        alert_mgr=alert_mgr,
+        model=model,
+        smart_train_func=smart_train,
+        host=WEBHOOK_HOST,
+        port=WEBHOOK_PORT,
+        secret=WEBHOOK_SECRET
+    )
 
-    # ── 5. Camera ────────────────────────────────────────────────
-    logger.info("📷 Initialising camera …")
+    # ── 6. Hardware Context Deployment ────────────────────────
+    logger.info("Initialising PIR sensor …")
+    pir = PIRSENSOR(pir_pin=23)
+
+    logger.info("Initialising RFID reader …")
+    rfid = RFIDManager()
+
+    state = DoorLockState()
+
+    threading.Thread(
+        target=sensor_polling_thread,
+        args=(pir, rfid, state),
+        daemon=True,
+        name="SensorPolling",
+    ).start()
+
+    # ── 7. Camera Handlers ────────────────────────────────────
+    logger.info("Initialising camera …")
     camera = CameraManager(
-        resolution        = CAMERA_RESOLUTION,
-        framerate         = CAMERA_FPS,
-        preview_resolution= CAMERA_PREVIEW_RESOLUTION,
+        resolution         = CAMERA_RESOLUTION,
+        framerate          = CAMERA_FPS,
+        preview_resolution = CAMERA_PREVIEW_RESOLUTION,
     )
 
     if not camera.initialize_camera():
-        logger.error("❌ Camera failed to initialise. Exiting.")
+        logger.error("Camera failed to initialise. Exiting.")
+        pir.cleanup()
+        rfid.stop()
         return
 
-    camera.start_preview_stream(fps=CAMERA_FPS)
+    logger.info("System ready — waiting for motion …  (press 'q' to quit)")
 
-    logger.info("\n✅ System Ready!")
-    logger.info("   Press 's' → Start 10-second recording (uploads to Supabase)")
-    logger.info("   Press 'q' → Quit\n")
-
-    # ── 6. Main camera loop ───────────────────────────────────────
+    # ── Main Loop State Engine ────────────────────────────────
+    camera_active     = False
+    camera_starting   = False
     recording         = False
     video_writer      = None
     temp_video_path   = None
     record_start_time = None
+    last_motion_time  = None
+    first_frame_time  = None
 
     try:
         while True:
+            motion_now = state.is_motion()
+
+            # ── Trigger camera startup on motion ──────────────
+            if motion_now:
+                last_motion_time = time.time()
+                if not camera_active and not camera_starting:
+                    logger.info("Motion detected → launching camera startup thread …")
+                    
+                    # 💡 UPSTREAM REALTIME WARNING TRIGGER
+                    # Background thread executes instantly to warn the database & app
+                    alert_mgr.trigger_cloud_alert("motion_detected", "Someone is at the door!")
+                    
+                    state.reset_camera_ready()
+                    camera_starting = True
+                    threading.Thread(
+                        target=camera_startup_thread,
+                        args=(camera, state),
+                        daemon=True,
+                        name="CameraStartup",
+                    ).start()
+
+            # ── Camera became ready → begin recording immediately ──
+            if camera_starting and state.is_camera_ready():
+                camera_active    = True
+                camera_starting  = False
+                first_frame_time = time.time()
+
+                if not recording:
+                    logger.info("Camera live → locking motion gate and starting recording immediately …")
+                    state.lock_motion()
+
+                    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                        temp_video_path = tmp.name
+
+                    fourcc       = cv2.VideoWriter_fourcc(*"mp4v")
+                    video_writer = cv2.VideoWriter(
+                        temp_video_path, fourcc, RECORDING_FPS, CAMERA_PREVIEW_RESOLUTION
+                    )
+                    recording         = True
+                    record_start_time = time.time()
+                    logger.warning(f"Recording started → {temp_video_path}")
+
+            # ── Idle timeout (only when NOT recording) ────────
+            if (
+                camera_active
+                and not recording
+                and not motion_now
+                and first_frame_time is not None
+            ):
+                idle_baseline = max(first_frame_time, last_motion_time or 0)
+                if (time.time() - idle_baseline) > CAMERA_IDLE_TIMEOUT:
+                    logger.info(f"No motion for {CAMERA_IDLE_TIMEOUT}s → sleeping camera.")
+                    rst = _sleep_camera(camera, state)
+                    camera_active    = rst["camera_active"]
+                    camera_starting  = rst["camera_starting"]
+                    first_frame_time = rst["first_frame_time"]
+                    last_motion_time = rst["last_motion_time"]
+
+            if not camera_active:
+                time.sleep(0.05)
+                continue
+
+            # ── Frame Processing Sequence ────────────────────
             frame = camera.get_next_frame()
             if frame is None:
                 time.sleep(0.01)
                 continue
 
-            # BGRA → BGR if camera returns alpha channel
             if frame.ndim == 3 and frame.shape[2] == 4:
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
-            # Face detection + drawing
+            # ── Neural Network Processing ─────────────────────
             frame = model.process_frame(frame)
             frame = model.draw_results(frame)
+            detected_names = model.get_detected_names()
 
-            # Status overlay
+            known_face_present = any(
+                name.lower() not in ("unknown", "") for name in detected_names
+            )
+
+            rfid_authorized = state.consume_authorized()
+
+            # ── Access Control Decision Matrix ────────────────
             if recording:
-                elapsed   = time.time() - record_start_time
-                remaining = max(0, RECORDING_DURATION - elapsed)
-                status_text  = f"RECORDING  {remaining:.1f}s left"
-                status_color = (0, 0, 255)
-            else:
-                status_text  = "Monitoring  |  press S to record"
-                status_color = (0, 255, 0)
-
-            cv2.putText(frame, status_text, (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, status_color, 2)
-
-            cv2.imshow("Face Recognition Door Lock", frame)
-            key = cv2.waitKey(1) & 0xFF
-
-            # ── Quit ──────────────────────────────────────────────
-            if key == ord('q'):
-                logger.info("Quit key pressed.")
-                break
-
-            # ── Start recording ───────────────────────────────────
-            if key in (ord('s'), ord('S')) and not recording:
-                logger.info("'s' pressed → starting 10-second recording …")
-                with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
-                    temp_video_path = tmp.name
-                fourcc       = cv2.VideoWriter_fourcc(*'mp4v')
-                video_writer = cv2.VideoWriter(
-                    temp_video_path, fourcc, RECORDING_FPS, CAMERA_PREVIEW_RESOLUTION
-                )
-                recording         = True
-                record_start_time = time.time()
-
-            # ── Write frames / stop recording ────────────────────
-            if recording:
-                video_writer.write(frame)
                 elapsed = time.time() - record_start_time
 
-                if elapsed >= RECORDING_DURATION:
-                    logger.info("Recording complete → releasing writer …")
-                    video_writer.release()
-                    video_writer = None
-                    recording    = False
-
-                    # Upload clip to Supabase
-                    if storage and temp_video_path and os.path.exists(temp_video_path):
-                        logger.info("Uploading clip to Supabase …")
-                        try:
-                            url = storage.upload_and_get_url(temp_video_path)
-                            if url:
-                                logger.info(f"✅ Upload complete! Link: {url}")
-                            else:
-                                logger.error("Upload returned no URL.")
-                        except Exception as e:
-                            logger.error(f"Upload failed: {e}")
+                # Authorized → abort clip, sleep camera instantly
+                if known_face_present or rfid_authorized:
+                    reason = "Known face" if known_face_present else "RFID"
+                    logger.info(f"{reason} detected → authorised access. Aborting clip and sleeping camera.")
+                    
+                    # Telemetry push on success operations
+                    if known_face_present:
+                        authorized_user = [n for n in detected_names if n.lower() not in ("unknown", "")][0]
+                        alert_mgr.trigger_cloud_alert("face_success", f"Welcome back! {authorized_user} unlocked the door.")
                     else:
-                        logger.warning(
-                            "Supabase not connected or temp file missing — clip NOT uploaded."
-                        )
-
-                    # Cleanup temp file
+                        alert_mgr.trigger_cloud_alert("rfid_success", "Door unlocked via authorized RFID Tag.")
+                    
+                    video_writer.release()
                     if temp_video_path and os.path.exists(temp_video_path):
                         os.remove(temp_video_path)
-                    temp_video_path = None
+                        logger.info("Aborted clip deleted.")
+
+                    recording         = False
+                    video_writer      = None
+                    temp_video_path   = None
+                    record_start_time = None
+
+                    rst = _sleep_camera(camera, state)
+                    camera_active    = rst["camera_active"]
+                    camera_starting  = rst["camera_starting"]
+                    first_frame_time = rst["first_frame_time"]
+                    last_motion_time = rst["last_motion_time"]
+                    state.unlock_motion()
+                    continue
+
+                # Stream current matrix array onto disk
+                video_writer.write(frame)
+
+                # Recording duration reached without clearance → upload alert sequence
+                if elapsed >= RECORDING_DURATION:
+                    logger.warning(f"Recording complete ({RECORDING_DURATION}s) — breach verified → uploading clip …")
+                    
+                    # Log unauthorized breach event on the cloud telemetry table
+                    alert_mgr.trigger_cloud_alert("unauthorized_breach", "Security Breach: Unrecognized entity verified at physical asset terminal.")
+                    
+                    video_writer.release()
+                    clip_path         = temp_video_path
+                    temp_video_path   = None
+                    video_writer      = None
+                    recording         = False
+                    record_start_time = None
+
+                    rst = _sleep_camera(camera, state)
+                    camera_active    = rst["camera_active"]
+                    camera_starting  = rst["camera_starting"]
+                    first_frame_time = rst["first_frame_time"]
+                    last_motion_time = rst["last_motion_time"]
+
+                    threading.Thread(
+                        target=upload_and_cleanup,
+                        args=(storage, clip_path, state),
+                        daemon=True,
+                        name="UploadClip",
+                    ).start()
+                    continue
+
+            # ── Display Interface Engine ──────────────────────
+            if recording and record_start_time:
+                remaining = max(0, RECORDING_DURATION - (time.time() - record_start_time))
+                hud_text  = f"RECORDING {remaining:.1f}s"
+                hud_color = (0, 0, 255)
+            else:
+                hud_text  = "Monitoring"
+                hud_color = (0, 255, 0)
+
+            cv2.putText(
+                frame, hud_text, (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, hud_color, 2,
+            )
+            cv2.imshow("Face Recognition Door Lock", frame)
+
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
     except KeyboardInterrupt:
-        logger.info("Interrupted by user.")
+        logger.info("System interrupted by user.")
     finally:
         if video_writer:
             video_writer.release()
@@ -529,6 +580,8 @@ def main():
             os.remove(temp_video_path)
         cv2.destroyAllWindows()
         camera.cleanup()
+        pir.cleanup()
+        rfid.stop()
         logger.info("System shutdown complete.")
 
 

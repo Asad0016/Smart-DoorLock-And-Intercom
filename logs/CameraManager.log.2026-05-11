@@ -1,0 +1,5 @@
+14:21:14 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+14:21:14 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+14:21:15 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+14:21:17 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+14:21:17 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps

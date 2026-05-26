@@ -1,0 +1,27 @@
+18:52:48 | SupabaseManager | [93mWARNING[0m | MainThread                       | Could not load cloud.credentials.env file
+18:52:48 | SupabaseManager | [91mERROR[0m   | MainThread                       | Missing Supabase credentials or BUCKET_NAME in .env file!
+18:57:01 | SupabaseManager | [93mWARNING[0m | MainThread                       | Could not load home/doorlock/DoorLock/Cloud/credentials.env file
+18:57:01 | SupabaseManager | [91mERROR[0m   | MainThread                       | Missing Supabase credentials or BUCKET_NAME in .env file!
+19:02:01 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+19:02:01 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+19:05:00 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+19:05:00 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+19:11:51 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+19:11:51 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+19:12:40 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+19:12:41 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+19:41:37 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+19:41:37 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+19:43:04 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+19:43:04 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+19:54:35 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+19:54:35 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+19:59:39 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+19:59:40 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+20:00:19 | SupabaseManager | [91mERROR[0m   | MainThread                       | ❌ Upload failed: {'statusCode': 403, 'error': Unauthorized, 'message': new row violates row-level security policy}
+20:05:26 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+20:05:26 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+20:06:10 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+20:06:10 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+20:06:56 | SupabaseManager | [92mINFO[0m    | MainThread                       | ✅ File uploaded successfully: tmpidzxjzzm.mp4
+20:06:56 | SupabaseManager | [92mINFO[0m    | MainThread                       | Public URL generated for tmpidzxjzzm.mp4

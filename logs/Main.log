@@ -1,0 +1,13 @@
+22:58:06 | Main            | [92mINFO[0m    | MainThread                       | ☁️  Connecting to Supabase …
+22:58:06 | Main            | [92mINFO[0m    | MainThread                       | ✅ Supabase connected.
+22:58:06 | Main            | [92mINFO[0m    | MainThread                       | 📦 Importing dataset from cloud bucket …
+22:58:07 | Main            | [92mINFO[0m    | MainThread                       | ✅ Dataset import complete.
+22:58:07 | Main            | [92mINFO[0m    | MainThread                       | 🧠 Initialising Face Recognition model …
+22:58:07 | Main            | [92mINFO[0m    | MainThread                       | ✅ Dataset unchanged and encodings present → skipping training.
+22:58:07 | Main            | [92mINFO[0m    | MainThread                       | 🌐 Webhook server listening on 0.0.0.0:5050
+22:58:07 | Main            | [92mINFO[0m    | MainThread                       | 📷 Initialising camera …
+22:58:10 | Main            | [92mINFO[0m    | MainThread                       | 
+✅ System Ready!
+22:58:10 | Main            | [92mINFO[0m    | MainThread                       |    Press 's' → Start 10-second recording (uploads to Supabase)
+22:58:10 | Main            | [92mINFO[0m    | MainThread                       |    Press 'q' → Quit
+

@@ -1,0 +1,70 @@
+18:44:57 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+18:44:57 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+18:52:45 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+18:52:45 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+18:52:46 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+18:52:48 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+18:52:48 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+18:56:58 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+18:56:58 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+18:56:59 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+18:57:01 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+18:57:01 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+19:01:58 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+19:01:58 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+19:01:59 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+19:02:01 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+19:02:01 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+19:04:57 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+19:04:57 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+19:04:58 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+19:05:00 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+19:05:00 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+19:11:48 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+19:11:48 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+19:11:49 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+19:11:51 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+19:11:51 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+19:12:37 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+19:12:37 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+19:12:38 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+19:12:40 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+19:12:40 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+19:41:34 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+19:41:34 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+19:41:35 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+19:41:37 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+19:41:37 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+19:43:01 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+19:43:01 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+19:43:02 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+19:43:04 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+19:43:04 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+19:54:32 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+19:54:32 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+19:54:33 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+19:54:35 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+19:54:35 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+19:59:21 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming stopped
+19:59:21 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera put to sleep after streaming
+19:59:21 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera fully stopped
+19:59:21 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera cleanup complete
+19:59:37 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+19:59:37 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+19:59:37 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+19:59:39 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+19:59:39 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+20:01:09 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming stopped
+20:01:09 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera put to sleep after streaming
+20:01:10 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera fully stopped
+20:01:10 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera cleanup complete
+20:05:23 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+20:05:23 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+20:05:24 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+20:05:26 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+20:05:26 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps
+20:06:07 | CameraManager   | [92mINFO[0m    | MainThread                       | CameraManager initialized
+20:06:07 | CameraManager   | [92mINFO[0m    | MainThread                       | Initializing camera...
+20:06:08 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera initialized: still (1920, 1080) @ 30fps, preview (640, 480)
+20:06:10 | CameraManager   | [92mINFO[0m    | MainThread                       | Camera started for preview
+20:06:10 | CameraManager   | [92mINFO[0m    | MainThread                       | Preview streaming started @ ~30 fps

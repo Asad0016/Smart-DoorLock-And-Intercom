@@ -1,0 +1,15 @@
+00:14:32 | FaceDetection   | [92mINFO[0m    | MainThread                       | ModelTraining initialized | dataset=/home/doorlock/DoorLock/dataset/Naveed encodings=/home/doorlock/DoorLock/dataset/encodings.pickle scaler=1/4
+00:14:32 | FaceDetection   | [92mINFO[0m    | MainThread                       | needs_training=True : encodings.pickle not found
+00:14:32 | FaceDetection   | [91mERROR[0m   | MainThread                       | No images found in dataset: /home/doorlock/DoorLock/dataset/Naveed
+19:59:37 | FaceDetection   | [92mINFO[0m    | MainThread                       | ModelTraining initialized | dataset=/home/doorlock/DoorLock/dataset/Naveed encodings=/home/doorlock/DoorLock/dataset/encodings.pickle scaler=1/4
+19:59:37 | FaceDetection   | [92mINFO[0m    | MainThread                       | needs_training=False : dataset unchanged, encodings are current
+19:59:37 | FaceDetection   | [92mINFO[0m    | MainThread                       | Training skipped – encodings are up-to-date. Loading from disk...
+19:59:37 | FaceDetection   | [92mINFO[0m    | MainThread                       | Loaded 5 encoding(s) for 1 person(s) from /home/doorlock/DoorLock/dataset/encodings.pickle
+20:05:23 | FaceDetection   | [92mINFO[0m    | MainThread                       | ModelTraining initialized | dataset=/home/doorlock/DoorLock/dataset/Naveed encodings=/home/doorlock/DoorLock/dataset/encodings.pickle scaler=1/4
+20:05:23 | FaceDetection   | [92mINFO[0m    | MainThread                       | needs_training=False : dataset unchanged, encodings are current
+20:05:23 | FaceDetection   | [92mINFO[0m    | MainThread                       | Training skipped – encodings are up-to-date. Loading from disk...
+20:05:23 | FaceDetection   | [92mINFO[0m    | MainThread                       | Loaded 5 encoding(s) for 1 person(s) from /home/doorlock/DoorLock/dataset/encodings.pickle
+20:06:07 | FaceDetection   | [92mINFO[0m    | MainThread                       | ModelTraining initialized | dataset=/home/doorlock/DoorLock/dataset/Naveed encodings=/home/doorlock/DoorLock/dataset/encodings.pickle scaler=1/4
+20:06:07 | FaceDetection   | [92mINFO[0m    | MainThread                       | needs_training=False : dataset unchanged, encodings are current
+20:06:07 | FaceDetection   | [92mINFO[0m    | MainThread                       | Training skipped – encodings are up-to-date. Loading from disk...
+20:06:07 | FaceDetection   | [92mINFO[0m    | MainThread                       | Loaded 5 encoding(s) for 1 person(s) from /home/doorlock/DoorLock/dataset/encodings.pickle

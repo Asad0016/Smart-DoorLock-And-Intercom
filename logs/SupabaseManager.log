@@ -1,0 +1,3 @@
+22:58:06 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+22:58:06 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager ready  |  dataset bucket: 'dataset'  |  recordings bucket: 'Recordings'
+22:58:07 | SupabaseManager | [92mINFO[0m    | MainThread                       | Dataset bucket is empty. Nothing to import.

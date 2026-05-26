@@ -1,0 +1,10 @@
+05:03:30 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+05:03:30 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager initialized successfully.
+05:03:32 | SupabaseManager | [92mINFO[0m    | MainThread                       | Found 1 items on the remote cloud environment.
+05:03:32 | SupabaseManager | [92mINFO[0m    | MainThread                       | Public URL generated for tmplyusxydd.mp4
+05:03:32 | SupabaseManager | [92mINFO[0m    | MainThread                       | 📥 Pulling asset data: tmplyusxydd.mp4
+05:03:38 | SupabaseManager | [92mINFO[0m    | MainThread                       | Saved locally: /home/doorlock/DoorLock/dataset/tmplyusxydd.mp4
+05:03:38 | SupabaseManager | [92mINFO[0m    | MainThread                       | Startup Synchronization Complete. Dataset is fully loaded.
+05:11:31 | SupabaseManager | [92mINFO[0m    | MainThread                       | Loading env file from: /home/doorlock/DoorLock/supabase/credentials.env
+05:11:32 | SupabaseManager | [92mINFO[0m    | MainThread                       | SupabaseManager ready  |  dataset bucket: 'dataset'  |  recordings bucket: 'Recordings'
+05:11:33 | SupabaseManager | [92mINFO[0m    | MainThread                       | Dataset bucket is empty. Nothing to import.
