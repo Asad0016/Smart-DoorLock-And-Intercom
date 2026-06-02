@@ -30,7 +30,7 @@ class SupabaseManager:
         self._supabase_key: str  = os.getenv("SUPABASE_KEY")
 
         # ── Two separate buckets ──────────────────────────────────
-        self._dataset_bucket:    str = os.getenv("DATASET_BUCKET",    "dataset")
+        self._dataset_bucket:    str = os.getenv("DATASET_BUCKET",    "faces")
         self._recordings_bucket: str = os.getenv("RECORDINGS_BUCKET", "Recordings")
 
         self._client: Optional[Client] = None

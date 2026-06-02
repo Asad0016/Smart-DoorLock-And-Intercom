@@ -1,6 +1,6 @@
 """
 webhook.py - Isolated Flask Webhook Server for Face Synchronization
-Handles Supabase routing requests, token verification, and model retraining threads.
+Handles Supabase routing requests, token verification, and sequential model retraining.
 """
 
 import threading
@@ -11,6 +11,9 @@ from logs.logger import getLogger
 
 logger = getLogger("WebhookServer")
 
+# Global lock to prevent overlapping model training tasks
+training_lock = threading.Lock()
+
 def build_webhook_app(alert_mgr: AlertManager, model: ModelTraining, smart_train_func, webhook_secret: str) -> Flask:
     app = Flask(__name__)
     import logging as _logging
@@ -18,30 +21,43 @@ def build_webhook_app(alert_mgr: AlertManager, model: ModelTraining, smart_train
 
     @app.route("/new-face", methods=["POST"])
     def face_sync():
-        # Verify custom gateway security handshake
+        # 1. Verify custom gateway security handshake
         incoming_secret = request.headers.get("X-Gateway-Secret", "")
         if incoming_secret != webhook_secret:
             logger.warning("Auth failure: Unauthorized payload dropped by webhook server.")
             return jsonify({"error": "Unauthorized"}), 401
 
-        data = request.get_json(silent=True) or {}
+        # Force parse json even if headers are slightly malformed from the proxy/edge
+        data = request.get_json(force=True, silent=True) or {}
         
-        # Execute the download/mirror logic via AlertManager
+        # 2. Execute the download/mirror logic via AlertManager
         result, status_code = alert_mgr.handle_new_face_sync(data)
 
         if status_code == 200:
+            # Check if this is a dummy node or an actual image download sync
             event_type = data.get("event_type", "")
-            file_path  = str(data.get("file_path", ""))
-
-            if event_type == "new_folder" or file_path.endswith("/"):
-                logger.info("Webhook: New profile directory mirrored safely. No training needed.")
+            
+            if event_type == "new_folder":
+                logger.info("Webhook: Local profile node synchronized. Training skipped.")
             else:
-                logger.info("Webhook: Live image sync completed → dispatching smart retrain background worker...")
-                
-                # Launching the training sequence on a separate daemon thread
+                # 3. Safe Sequential Background Training Thread
+                def safe_training_worker():
+                    # Thread execution check: if another training is active, it waits in queue safely
+                    if not training_lock.acquire(blocking=False):
+                        logger.warning("Webhook: Model retraining already in progress. Queueing or skipping thread execution.")
+                        return
+                    try:
+                        logger.info("Webhook: Core lock acquired → Initiating smart retrain worker context...")
+                        smart_train_func(model=model, force=True)
+                        logger.info("Webhook: Smart retraining sequence finished successfully. Lock released.")
+                    except Exception as e:
+                        logger.error(f"Critical failure inside training worker thread execution: {e}")
+                    finally:
+                        training_lock.release()
+
+                # Launching the wrapper task on a separate daemon thread
                 threading.Thread(
-                    target=smart_train_func,
-                    kwargs={"model": model, "force": True},
+                    target=safe_training_worker,
                     daemon=True,
                     name="WebhookRetrain",
                 ).start()
@@ -54,9 +70,44 @@ def build_webhook_app(alert_mgr: AlertManager, model: ModelTraining, smart_train
         if incoming_secret != webhook_secret:
             return jsonify({"error": "Unauthorized"}), 401
 
-        data = request.get_json(silent=True) or {}
+        data = request.get_json(force=True, silent=True) or {}
         result, status_code = alert_mgr.handle_intruder_alert(data)
         return jsonify(result), status_code
+
+    # ── FIXED: Moved inside the factory scope BEFORE 'return app' ──
+    @app.route("/door-command", methods=["POST"])
+    def door_command_trigger():
+        # Security handshake check
+        incoming_secret = request.headers.get("X-Gateway-Secret", "")
+        if incoming_secret != webhook_secret:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        data = request.get_json(force=True, silent=True) or {}
+        command = data.get("command") # 'view_live_feed', 'unlock', ya 'stop_video_call'
+        user_id = data.get("user_id")
+
+        logger.info(f"🚪 Door command received via Edge Function: {command}")
+
+        # Execute streaming, stopping, or unlocking context
+        if command == "view_live_feed":
+            threading.Thread(
+                target=alert_mgr.start_intercom_stream,
+                args=(user_id,),
+                daemon=True,
+                name="IntercomStream"
+            ).start()
+            return jsonify({"status": "success", "message": "Streaming initialization sequence kicked off."}), 200
+
+        elif command == "unlock":
+            alert_mgr.trigger_door_latch()
+            return jsonify({"status": "success", "message": "Latching hardware triggered."}), 200
+
+        elif command == "stop_video_call":
+            # Direct cleanup execution without thread context locking overhead
+            alert_mgr.stop_intercom_stream()
+            return jsonify({"status": "success", "message": "Intercom stream teardown executed safely."}), 200
+
+        return jsonify({"status": "error", "message": "Unknown command context"}), 400
 
     return app
 
@@ -70,7 +121,7 @@ def start_webhook_server(alert_mgr: AlertManager, model: ModelTraining, smart_tr
     threading.Thread(
         target=lambda: app.run(host=host, port=port, use_reloader=False),
         daemon=True,
-        name="WebhookServer",
+        name="WebhookServerLoop",
     ).start()
     
     logger.info(f"Webhook tracking operational gateway bound to http://{host}:{port}/new-face")

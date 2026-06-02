@@ -19,8 +19,9 @@ import os
 import tempfile
 import threading
 import time
+from Hardware.relay import MagneticLock
 import cv2
-
+from Hardware.relay import MagneticLock
 # Environmental control variables parsing library
 from dotenv import load_dotenv
 
@@ -31,7 +32,7 @@ from Hardware.rfid import RFIDManager
 from Hardware.MotionSensor import PIRSENSOR
 from logs.logger import getLogger
 from software.FaceDetection import ModelTraining
-
+from Hardware.mic import INMP441MicRecorder
 # Imported cleanly from your new decoupled module
 from Cloud.webhook import start_webhook_server
 
@@ -288,7 +289,40 @@ def _sleep_camera(camera: CameraManager, state: DoorLockState) -> dict:
         "last_motion_time":  None,
     }
 
+def _merge_audio_video(video_path: str, audio_path: str | None) -> str:
+    """Merge mic WAV into the video using ffmpeg. Returns path to merged file."""
+    if not audio_path or not os.path.exists(audio_path):
+        logger.warning("No audio file to merge — uploading video only.")
+        return video_path
 
+    merged_path = video_path.replace(".mp4", "_merged.mp4")
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", video_path,
+        "-i", audio_path,
+        "-c:v", "copy",       # no re-encode, fast
+        "-c:a", "aac",        # convert WAV → AAC for mp4 container
+        "-shortest",          # trim to the shorter stream
+        merged_path
+    ]
+    try:
+        import subprocess
+        result = subprocess.run(cmd, capture_output=True, timeout=30)
+        if result.returncode == 0:
+            logger.info(f"Audio merged → {merged_path}")
+            os.remove(video_path)
+            os.remove(audio_path)
+            return merged_path
+        else:
+            logger.error(f"ffmpeg merge failed: {result.stderr.decode()}")
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            return video_path   # fall back to video-only
+    except Exception as e:
+        logger.error(f"ffmpeg error: {e}")
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+        return video_path
 # ══════════════════════════════════════════════════════════════
 #  MAIN EXECUTION CONTEXT
 # ══════════════════════════════════════════════════════════════
@@ -345,12 +379,7 @@ def main():
 
     # ── 5. Modularized Webhook Server Bootstrap ───────────────
     # 💡 UPDATED: Initializing alert_mgr with dynamic credentials read from .env
-    alert_mgr = AlertManager(
-        base_storage_path = DATASET_PATH,
-        secret_key        = WEBHOOK_SECRET,
-        supabase_url      = SUPABASE_URL,
-        supabase_key      = SUPABASE_KEY
-    )
+# initialise with your actual GPIO pin
     
     # Handing over runtime dependencies securely to webhook.py
     start_webhook_server(
@@ -385,15 +414,27 @@ def main():
         framerate          = CAMERA_FPS,
         preview_resolution = CAMERA_PREVIEW_RESOLUTION,
     )
-
     if not camera.initialize_camera():
         logger.error("Camera failed to initialise. Exiting.")
         pir.cleanup()
         rfid.stop()
         return
+    logger.info("initializing microphone...")
+    mic = INMP441MicRecorder()
+    logger.info("initializing lock driver...")
+    lock = MagneticLock(pin=18)
 
+
+    alert_mgr = AlertManager(
+        base_storage_path = DATASET_PATH,
+        secret_key        = WEBHOOK_SECRET,
+        supabase_url      = SUPABASE_URL,
+        supabase_key      = SUPABASE_KEY,
+        camera_manager    = camera,
+        mic_recorder      = mic,
+        lock              = lock,
+    )
     logger.info("System ready — waiting for motion …  (press 'q' to quit)")
-
     # ── Main Loop State Engine ────────────────────────────────
     camera_active     = False
     camera_starting   = False
@@ -447,7 +488,8 @@ def main():
                     recording         = True
                     record_start_time = time.time()
                     logger.warning(f"Recording started → {temp_video_path}")
-
+                    mic.start_recording()
+                    logger.info("Mic recording started alongside video.")
             # ── Idle timeout (only when NOT recording) ────────
             if (
                 camera_active
@@ -503,8 +545,17 @@ def main():
                         alert_mgr.trigger_cloud_alert("face_success", f"Welcome back! {authorized_user} unlocked the door.")
                     else:
                         alert_mgr.trigger_cloud_alert("rfid_success", "Door unlocked via authorized RFID Tag.")
-                    
+                    threading.Thread(
+                        target=lock.unlock,  # direct hardware call to unlock the door
+                        kwargs={"hold_time": 3.0},
+                        daemon=True,
+                        name="DoorUnlock",
+                    ).start()
                     video_writer.release()
+                    mic_path = mic.stop_recording(custom_filename=temp_video_path.replace(".mp4", "_audio.wav"))
+                    if mic_path and os.path.exists(mic_path):
+                        os.remove(mic_path)
+                        logger.info("Associated mic recording deleted.")
                     if temp_video_path and os.path.exists(temp_video_path):
                         os.remove(temp_video_path)
                         logger.info("Aborted clip deleted.")
@@ -533,7 +584,11 @@ def main():
                     alert_mgr.trigger_cloud_alert("unauthorized_breach", "Security Breach: Unrecognized entity verified at physical asset terminal.")
                     
                     video_writer.release()
-                    clip_path         = temp_video_path
+                    mic_path = mic.stop_recording(custom_filename="temp_intruder_mic.wav")
+                    if mic_path and os.path.exists(mic_path):
+                        clip_path = _merge_audio_video(temp_video_path, mic_path)
+                    else:
+                        clip_path = temp_video_path
                     temp_video_path   = None
                     video_writer      = None
                     recording         = False
@@ -581,7 +636,9 @@ def main():
         cv2.destroyAllWindows()
         camera.cleanup()
         pir.cleanup()
+        mic.cleanup()
         rfid.stop()
+        lock.cleanup()  
         logger.info("System shutdown complete.")
 
 
