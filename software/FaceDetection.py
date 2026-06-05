@@ -126,6 +126,13 @@ class ModelTraining:
         # If any old fingerprint is missing from the new set, an absolute deletion occurred
         removed_items_detected = not saved_fingerprints.issubset(live_fingerprints)
 
+        # 🔥 DIAGNOSTIC LOGS: Yeh aapko terminal par exact sachai batayenge
+        logger.info(f"[TRAIN CONFIG] incoming force={force} | removed_items_detected={removed_items_detected}")
+        logger.info(f"[TRAIN CONFIG] Initial dynamic path delta count: {len(paths_to_train)}")
+        if removed_items_detected and not force:
+            missing_hashes = saved_fingerprints - live_fingerprints
+            logger.warning(f"[TRAIN CONFIG] Detected deleted file signatures from disk cache: {missing_hashes}")
+
         # Handle complete rebuild or incremental operations structurally
         if force or removed_items_detected:
             logger.info("Dataset items removed or forced update initialized. Clearing caches for full rebuild.")
@@ -169,6 +176,7 @@ class ModelTraining:
                 # Merge phase
                 self.known_encodings.extend(new_encodings)
                 self.known_names.extend(new_names)
+                logger.info(f"Successfully appended {len(new_encodings)} new vectors into active RAM database.")
             else:
                 # Rebuild phase
                 self.known_encodings = new_encodings

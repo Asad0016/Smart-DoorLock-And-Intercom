@@ -48,7 +48,7 @@ def build_webhook_app(alert_mgr: AlertManager, model: ModelTraining, smart_train
                         return
                     try:
                         logger.info("Webhook: Core lock acquired → Initiating smart retrain worker context...")
-                        smart_train_func(model=model, force=True)
+                        smart_train_func(force=False)
                         logger.info("Webhook: Smart retraining sequence finished successfully. Lock released.")
                     except Exception as e:
                         logger.error(f"Critical failure inside training worker thread execution: {e}")
@@ -85,8 +85,7 @@ def build_webhook_app(alert_mgr: AlertManager, model: ModelTraining, smart_train
         data = request.get_json(force=True, silent=True) or {}
         command = data.get("command") # 'view_live_feed', 'unlock', ya 'stop_video_call'
         user_id = data.get("user_id")
-
-        logger.info(f"🚪 Door command received via Edge Function: {command}")
+        logger.info(f"Door command received via Edge Function: {command}")
 
         # Execute streaming, stopping, or unlocking context
         if command == "view_live_feed":

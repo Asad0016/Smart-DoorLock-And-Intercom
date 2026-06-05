@@ -1,3 +1,7 @@
 .vscode
 dataset
 venv
+config.py
+test.py
+Cloud/credentials.env
+.vscode/sftp.json

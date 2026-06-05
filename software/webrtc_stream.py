@@ -250,9 +250,13 @@ class WebRTCSession:
     # ── Supabase signalling helpers ───────────────────────────
 
     async def _publish_offer(self, local_desc) -> bool:
-        """Write Pi's SDP offer into webrtc_sessions table."""
+        """Write or overwrite Pi's SDP offer into webrtc_sessions table via UPSERT."""
         url     = f"{self._supabase_url}/rest/v1/webrtc_sessions"
+        
+        # 🔥 OPTIMIZED: Added resolution headers to handle rapid sequential clicks gracefully
         headers = self._headers()
+        headers["Prefer"] = "resolution=merge-duplicates" 
+
         payload = {
             "user_id": self._user_id,
             "sdp":     local_desc.sdp,
@@ -266,7 +270,7 @@ class WebRTCSession:
                     timeout=aiohttp.ClientTimeout(total=5)
                 ) as r:
                     if r.status in (200, 201):
-                        logger.info(f"Offer published. HTTP {r.status}")
+                        logger.info(f"Offer published/updated successfully. HTTP {r.status}")
                         return True
                     logger.error(f"Offer publish failed. HTTP {r.status}: {await r.text()}")
                     return False
@@ -279,6 +283,8 @@ class WebRTCSession:
         Poll webrtc_sessions table for a row with status='answer'
         belonging to this user_id. Retries every 1s up to timeout_s.
         """
+        # 🔥 OPTIMIZED: Ordered by an auto-incrementing id or timestamp if available, 
+        # or strictly grabbing the single live updated answer context.
         url     = (
             f"{self._supabase_url}/rest/v1/webrtc_sessions"
             f"?user_id=eq.{self._user_id}"
@@ -297,14 +303,15 @@ class WebRTCSession:
                         timeout=aiohttp.ClientTimeout(total=5)
                     ) as r:
                         data = await r.json()
-                        if data:
-                            logger.info("SDP answer found in Supabase.")
+                        if data and len(data) > 0:
+                            logger.info("Valid SDP answer found in Supabase! Completing handshake...")
                             return data[0]
                 except Exception as e:
                     logger.debug(f"Polling for answer: {e}")
 
                 await asyncio.sleep(1)
 
+        logger.warning("WebRTC Handshake Timeout: The phone application did not write back its SDP answer.")
         return None
 
     async def _teardown(self):

@@ -61,7 +61,19 @@ class SupabaseManager:
 
     def get_recordings_bucket(self) -> str:
         return self._recordings_bucket
+    # ─────────────────────────────────────────────────────────────
+    #  Properties (expose internal values securely)
+    # ─────────────────────────────────────────────────────────────
 
+    @property
+    def supabase_url(self) -> Optional[str]:
+        """Expose the Supabase connection URL securely."""
+        return self._supabase_url
+
+    @property
+    def supabase_key(self) -> Optional[str]:
+        """Expose the Supabase secret API key securely."""
+        return self._supabase_key
     # ─────────────────────────────────────────────────────────────
     #  Generic helpers  (bucket-agnostic, used internally)
     # ─────────────────────────────────────────────────────────────
