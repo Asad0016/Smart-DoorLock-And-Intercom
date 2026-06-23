@@ -3,7 +3,7 @@ DeviceManager.py
 Owns and manages the full lifecycle of every hardware component,
 cloud service, and software module in the DoorLock system.
 
-Main.py only creates a DeviceManager and calls .start() / .stop().
+Main.py only creates a DeviceManager and calls .boot() / .run_loop().
 All initialization, wiring, and smart-train logic lives here.
 """
 
@@ -25,7 +25,7 @@ from config import (
     LOCK_GPIO_PIN, PIR_GPIO_PIN,
     WEBHOOK_SECRET, WEBHOOK_HOST, WEBHOOK_PORT,
     MIC_DEVICE_STRING, MIC_RATE, MIC_CHANNELS, MIC_VOLUME_GAIN, MIC_OUTPUT_FOLDER,
-    IMAGE_EXTENSIONS,
+    IMAGE_EXTENSIONS, PRESENCE_COOLDOWN_SECS,
 )
 
 from Cloud.AlertManager        import AlertManager
@@ -41,16 +41,16 @@ from logs.logger               import getLogger
 
 
 # ══════════════════════════════════════════════════════════════
-#  SHARED STATE  (thread-safe) — lives inside DeviceManager
+#  SHARED STATE  (thread-safe)
 # ══════════════════════════════════════════════════════════════
 
 class DoorLockState:
     def __init__(self):
-        self._lock         = threading.Lock()
-        self.authorized    = False
-        self.motion_active = False
-        self.motion_locked = False
-        self.camera_ready  = False
+        self._lock          = threading.Lock()
+        self.authorized     = False
+        self.motion_active  = False
+        self.motion_locked  = False
+        self.camera_ready   = False
 
     def set_authorized(self, value: bool) -> None:
         with self._lock:
@@ -99,12 +99,13 @@ class DoorLockState:
 class DeviceManager:
     """
     Single owner of every resource in the DoorLock system.
-    
+    LCD / TouchKeypad is managed separately — not owned here.
+
     Lifecycle:
         dm = DeviceManager()
-        dm.boot()           ← initializes everything
-        dm.run_loop()       ← blocking main loop
-        dm.shutdown()       ← called automatically on exit
+        dm.boot()        ← initializes everything
+        dm.run_loop()    ← blocking main loop
+        dm.shutdown()    ← called automatically on exit
     """
 
     def __init__(self):
@@ -125,7 +126,7 @@ class DeviceManager:
         self.model  : ModelTraining      | None = None
 
         # ── Runtime state ──────────────────────────────────────
-        self.state  = DoorLockState()
+        self.state    = DoorLockState()
         self._running = False
 
         # ── Main loop variables ────────────────────────────────
@@ -138,15 +139,15 @@ class DeviceManager:
         self._last_motion_time  = None
         self._first_frame_time  = None
 
+        # ── Presence cooldown ──────────────────────────────────
+        self._last_event_time   : float | None = None
+        self._presence_cooldown : float        = PRESENCE_COOLDOWN_SECS
+
     # ══════════════════════════════════════════════════════════
     #  BOOT SEQUENCE
     # ══════════════════════════════════════════════════════════
 
     def boot(self) -> bool:
-        """
-        Full system initialization in correct dependency order.
-        Returns False if any critical component fails.
-        """
         self.logger.info("═══════ DoorLock DeviceManager Boot Sequence ═══════")
 
         if not self._init_cloud():
@@ -157,8 +158,8 @@ class DeviceManager:
             return False
 
         encodings_exist = (
-        os.path.exists(ENCODINGS_PATH)
-        and os.path.getsize(ENCODINGS_PATH) > 0
+            os.path.exists(ENCODINGS_PATH)
+            and os.path.getsize(ENCODINGS_PATH) > 0
         )
         if not encodings_exist:
             self.logger.info("No encodings found — running initial training.")
@@ -223,10 +224,6 @@ class DeviceManager:
     # ── Smart Train ────────────────────────────────────────────
 
     def _smart_train(self, force: bool = False) -> bool:
-        """
-        Content-based smart training — only retrains when dataset changed.
-        Computes SHA-256 over all image files and compares to saved hash.
-        """
         dataset_has_images = any(
             os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS
             for _, _, files in os.walk(DATASET_PATH)
@@ -237,9 +234,9 @@ class DeviceManager:
             self.logger.warning("No images in dataset — skipping training.")
             return False
 
-        current_hash  = self._compute_dataset_hash()
-        saved_hash    = self._load_saved_hash()
-        encodings_ok  = (
+        current_hash = self._compute_dataset_hash()
+        saved_hash   = self._load_saved_hash()
+        encodings_ok = (
             os.path.exists(ENCODINGS_PATH)
             and os.path.getsize(ENCODINGS_PATH) > 0
         )
@@ -369,6 +366,43 @@ class DeviceManager:
         )
         self.logger.info("Webhook server running.")
 
+    # ══════════════════════════════════════════════════════════
+    #  UNIFIED UNLOCK HELPER
+    # ══════════════════════════════════════════════════════════
+
+    def _trigger_unlock(self, reason: str, name: str | None = None):
+        if reason == "RFID":
+            alert_event = "rfid_success"
+            alert_msg   = f"Welcome back! {name or 'Unknown Card'} unlocked the door."
+        elif reason == "FACE":
+            alert_event = "face_success"
+            alert_msg   = f"Welcome back! {name} unlocked the door." if name else "Door unlocked."
+        else:
+            alert_event = "access_granted"
+            alert_msg   = "Door unlocked."
+
+        self.logger.info(f"{reason} authorized ({name}) → unlocking door.")
+
+        if self.lock:
+            threading.Thread(
+                target = self.lock.unlock,
+                kwargs = {"hold_time": 5.0},
+                daemon = True,
+                name   = f"DoorUnlock-{reason}",
+            ).start()
+        else:
+            self.logger.warning(f"{reason} authorized but no lock device — cannot unlock!")
+
+        if self.alert_mgr:
+            try:
+                self.alert_mgr.trigger_cloud_alert(alert_event, alert_msg)
+            except Exception as e:
+                self.logger.warning(f"Alert on {reason} failed: {e}")
+
+        if self.pir:
+            self.pir.reset_cooldown()
+        self._mark_event_complete()
+
     # ── Sensor polling thread ──────────────────────────────────
 
     def _start_sensor_thread(self):
@@ -384,23 +418,55 @@ class DeviceManager:
         if not rfid_ok:
             self.logger.warning("RFID unavailable — PIR + face recognition only.")
 
+        RFID_COOLDOWN_SECS    = 3.0
+        _last_rfid_time: float | None = None
+
         while True:
             self.state.set_motion(self.pir.is_motion_active())
+
             if rfid_ok:
                 try:
                     if self.rfid.is_authorized_card():
-                        self.logger.info("RFID: authorized card tapped.")
-                        self.state.set_authorized(True)
+                        now = time.time()
+                        if _last_rfid_time is None or (now - _last_rfid_time) >= RFID_COOLDOWN_SECS:
+                            _last_rfid_time = now
+                            label = self.rfid.last_scanned_label or "Unknown Card"
+                            self.logger.info(f"RFID: authorized card tapped ({label}).")
+                            self.state.set_authorized(True)
+                            self._trigger_unlock("RFID", label)
+                        else:
+                            remaining = RFID_COOLDOWN_SECS - (now - _last_rfid_time)
+                            self.logger.debug(f"RFID: duplicate tap ignored ({remaining:.1f}s cooldown)")
                 except Exception as e:
                     self.logger.debug(f"RFID poll error: {e}")
+
             time.sleep(0.1)
+
+    # ══════════════════════════════════════════════════════════
+    #  PRESENCE COOLDOWN HELPERS
+    # ══════════════════════════════════════════════════════════
+
+    def _mark_event_complete(self):
+        self._last_event_time = time.time()
+        self.logger.info(
+            f"Event complete. Presence cooldown active for {self._presence_cooldown}s."
+        )
+
+    def _is_presence_cooldown_active(self) -> bool:
+        if self._last_event_time is None:
+            return False
+        elapsed   = time.time() - self._last_event_time
+        remaining = self._presence_cooldown - elapsed
+        if remaining > 0:
+            self.logger.debug(f"Presence cooldown — {remaining:.1f}s remaining.")
+            return True
+        return False
 
     # ══════════════════════════════════════════════════════════
     #  MAIN LOOP
     # ══════════════════════════════════════════════════════════
 
     def run_loop(self):
-        """Blocking main loop — call this from main.py after boot()."""
         self._running = True
         self.logger.info("Main loop started — waiting for motion… (press 'q' to quit)")
 
@@ -413,10 +479,11 @@ class DeviceManager:
             self.shutdown()
 
     def _tick(self):
-        """One iteration of the main loop."""
         motion_now = self.state.is_motion()
 
-        # ── Motion detected → start camera ────────────────────
+        if motion_now and self._is_presence_cooldown_active():
+            motion_now = False
+
         if motion_now:
             self._last_motion_time = time.time()
             if not self._camera_active and not self._camera_starting:
@@ -430,16 +497,13 @@ class DeviceManager:
                     name   = "CameraStartup",
                 ).start()
 
-        # ── Camera ready → start recording ────────────────────
         if self._camera_starting and self.state.is_camera_ready():
             self._camera_active    = True
             self._camera_starting  = False
             self._first_frame_time = time.time()
-
             if not self._recording:
                 self._start_recording()
 
-        # ── Idle timeout when not recording ───────────────────
         if (
             self._camera_active
             and not self._recording
@@ -455,7 +519,6 @@ class DeviceManager:
             time.sleep(0.05)
             return
 
-        # ── Get frame ─────────────────────────────────────────
         frame = self.camera.get_next_frame()
         if frame is None:
             time.sleep(0.01)
@@ -464,7 +527,6 @@ class DeviceManager:
         if frame.ndim == 3 and frame.shape[2] == 4:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
-        # ── Face recognition ───────────────────────────────────
         frame          = self.model.process_frame(frame)
         frame          = self.model.draw_results(frame)
         detected_names = self.model.get_detected_names()
@@ -479,12 +541,14 @@ class DeviceManager:
 
         rfid_authorized = self.state.consume_authorized()
 
-        # ── Recording logic ────────────────────────────────────
         if self._recording:
             elapsed = time.time() - self._record_start_time
 
             if known_face_present or rfid_authorized:
-                self._handle_authorized(known_face_present, authorized_name)
+                if known_face_present:
+                    self._trigger_unlock("FACE", authorized_name)
+                # RFID already unlocked from sensor thread — just abort clip
+                self._abort_recording()
                 return
 
             self._video_writer.write(frame)
@@ -493,7 +557,6 @@ class DeviceManager:
                 self._handle_breach()
                 return
 
-        # ── HUD display ────────────────────────────────────────
         if self._recording and self._record_start_time:
             remaining = max(0, RECORDING_DURATION - (time.time() - self._record_start_time))
             hud_text  = f"RECORDING {remaining:.1f}s"
@@ -541,42 +604,45 @@ class DeviceManager:
             self.mic.start_recording()
             self.logger.info("Mic recording started.")
 
-    def _handle_authorized(self, known_face: bool, name: str | None):
-        reason = "Known face" if known_face else "RFID"
-        self.logger.info(f"{reason} → authorized. Aborting clip.")
+    def _abort_recording(self):
+        """Cleans up an in-progress clip when an authorized event occurs."""
+        self.logger.info("Authorized during active recording — aborting clip.")
 
-        if known_face and name:
-            self.alert_mgr.trigger_cloud_alert("face_success", f"Welcome back! {name} unlocked the door.")
-        else:
-            self.alert_mgr.trigger_cloud_alert("rfid_success", "Door unlocked via authorized RFID.")
+        if self._video_writer is not None:
+            try:
+                self._video_writer.release()
+            except Exception as e:
+                self.logger.warning(f"Video writer release error: {e}")
 
-        if self.lock:
-            threading.Thread(
-                target = self.lock.unlock,
-                kwargs = {"hold_time": 3.0},
-                daemon = True,
-                name   = "DoorUnlock",
-            ).start()
-
-        self._video_writer.release()
-
-        if self.mic:
-            mic_path = self.mic.stop_recording(
-                custom_filename=self._temp_video_path.replace(".mp4", "_audio.wav")
-            )
-            if mic_path and os.path.exists(mic_path):
-                os.remove(mic_path)
+        if self.mic and self._recording:
+            try:
+                mic_path = self.mic.stop_recording(
+                    custom_filename=self._temp_video_path.replace(".mp4", "_audio.wav")
+                    if self._temp_video_path else None
+                )
+                if mic_path and os.path.exists(mic_path):
+                    os.remove(mic_path)
+            except Exception as e:
+                self.logger.warning(f"Mic stop error: {e}")
 
         if self._temp_video_path and os.path.exists(self._temp_video_path):
-            os.remove(self._temp_video_path)
-            self.logger.info("Aborted clip deleted.")
+            try:
+                os.remove(self._temp_video_path)
+                self.logger.info("Aborted clip deleted.")
+            except Exception as e:
+                self.logger.warning(f"Clip delete error: {e}")
 
         self._reset_recording_state()
-        self._sleep_camera()
+
+        if self._camera_active:
+            self._sleep_camera()
+
         self.state.unlock_motion()
 
     def _handle_breach(self):
-        self.logger.warning(f"Recording complete ({RECORDING_DURATION}s) — breach → uploading…")
+        self.logger.warning(
+            f"Recording complete ({RECORDING_DURATION}s) — breach → uploading…"
+        )
         self.alert_mgr.trigger_cloud_alert(
             "unauthorized_breach",
             "Security Breach: Unrecognized entity at terminal."
@@ -666,6 +732,8 @@ class DeviceManager:
                 os.remove(video_path)
                 self.logger.info("Local clip deleted.")
             self.state.unlock_motion()
+            self.pir.reset_cooldown()
+            self._mark_event_complete()
 
     # ══════════════════════════════════════════════════════════
     #  SHUTDOWN

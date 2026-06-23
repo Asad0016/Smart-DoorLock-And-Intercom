@@ -6,7 +6,8 @@ from logs.logger import getLogger
 
 from software.webrtc_stream import WebRTCSession
 from Hardware.relay import MagneticLock
-
+from Hardware.lcd import TouchKeypad
+from Hardware.rfid import RFIDManager
 
 class AlertManager:
     def __init__(
@@ -19,6 +20,10 @@ class AlertManager:
         camera_manager=None,
         mic_recorder=None,
         lock: MagneticLock = None,    # injected from main.py like camera and mic
+        keypad: TouchKeypad = None,   # injected from main.py
+        rfid_mgr: RFIDManager = None,   # injected from main.py
+        # injected from main.py like camera and mic
+
     ):
         self.logger = getLogger("AlertManager")
         self.base_path = os.path.abspath(base_storage_path)
@@ -33,7 +38,8 @@ class AlertManager:
         self._camera = camera_manager
         self._mic = mic_recorder
         self._lock = lock             # MagneticLock instance
-
+        self._keypad = keypad           # TouchKeypad instance
+        self._rfid_mgr = rfid_mgr         # RFIDManager instance
         # WebRTC session state
         self._webrtc_session: WebRTCSession | None = None
         self._webrtc_lock = threading.Lock()
@@ -178,7 +184,59 @@ class AlertManager:
 
             self._camera.stop_preview_stream()
             self.logger.info("Intercom stream fully torn down.")
+    def update_local_pin_schedule(self, data: dict) -> bool:
+        """
+        Webhook se data paker direct keypad ka set_pin call karta hai
+        """
+        try:
+            # Supabase webhook structure se 'record' nikalna
+            record = data.get("record", {})
+            new_pin = record.get("pin")
+            label = record.get("label", "Unknown Guest")
 
+            if not new_pin:
+                self.logger.warning("PIN sync failed: No PIN found in payload.")
+                return False
+
+            if self._keypad:
+                # Direct aapka bataya hua function trigger hoga
+                self._keypad.set_pin(new_pin)
+                
+                # Cloud par success return status bhejhein
+                self.trigger_cloud_alert("pin_synced", f"Hardware master PIN updated to {new_pin}")
+                return True
+            else:
+                self.logger.error("Keypad instance not injected in AlertManager.")
+                return False
+
+        except Exception as e:
+            self.logger.error(f"Error updating pin on hardware: {e}")
+            return False
+    def update_local_rfid_cache(self, data: dict) -> bool:
+        try:
+            card_uid = data.get("card_uid")
+            label = data.get("label", "Guest")
+            action = data.get("action", "INSERT")
+
+            if not card_uid:
+                self.logger.warning("RFID sync rejected: No card_uid found in payload.")
+                return False
+
+            if hasattr(self, '_rfid_mgr') and self._rfid_mgr:
+                
+                success = self._rfid_mgr.add_authorized_card(card_uid, label)
+                
+                if success:
+                    self.logger.info(f"Successfully synced RFID card {card_uid} via Webhook.")
+                   
+                    return True
+            else:
+                self.logger.error("RFIDManager instance not injected/found in AlertManager.")
+                return False
+
+        except Exception as e:
+            self.logger.error(f"Error executing update_local_rfid_cache: {e}")
+            return False
     # ══════════════════════════════════════════════════════════
     #  DOOR LATCH — uses MagneticLock.unlock() directly
     # ══════════════════════════════════════════════════════════

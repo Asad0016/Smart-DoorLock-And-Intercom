@@ -1,81 +1,83 @@
 """
 LockDriver.py - Class-level hardware controller for the physical door lock actuator.
-Handles GPIO initialization, latch triggering, and cleanup context.
+Production baseline for Raspberry Pi 5. Handles precise state synchronization.
 """
 
-import RPi.GPIO as GPIO
+from gpiozero import OutputDevice
 from time import sleep
 from logs.logger import getLogger
 
 logger = getLogger("LockDriver")
 
 class MagneticLock:
-    def __init__(self, pin: int = 18):
-        """
-        Initializes the Lock Driver configuration.
-        Default pin is set to GPIO 18 (BCM notation).
-        """
+    def __init__(self, pin: int = 17):
         self.lock_pin = pin
         self.logger = logger
+        self.device = None
         self._setup_gpio()
 
     def _setup_gpio(self):
-        """
-        Internal helper to initialize GPIO blocks safely.
-        """
         try:
-            GPIO.setwarnings(False)
-            # Ensure safe configuration checking before setting mode
-            if GPIO.getmode() is None:
-                GPIO.setmode(GPIO.BCM)
-                
-            GPIO.setup(self.lock_pin, GPIO.OUT)
-            
-            # Keep the door LOCKED by default on startup
-            # Active Low Relay Context: High (1) keeps the relay off/locked
-            GPIO.output(self.lock_pin, GPIO.HIGH)
-            self.logger.info(f"Hardware initialization complete. Pin {self.lock_pin} configured as LOCK_OUTPUT.")
+            # Active-Low Relay ke liye direct standard architecture initialize karein
+            self.device = OutputDevice(self.lock_pin, active_high=False, initial_value=False)
+            self.logger.info(f"🔒 [SAFE INIT] GPIO Pin {self.lock_pin} baseline established successfully.")
         except Exception as e:
-            self.logger.error(f"Failed to initialize GPIO pin {self.lock_pin}: {e}")
+            self.logger.error(f"Failed to initialize GPIO: {e}")
 
-    def unlock(self, hold_time: float = 3.0) -> bool:
-        """
-        Fires the relay state to break/complete the circuit, releasing the lock actuator.
-        Automatically relocks after the hold_time expires.
-        """
+    def unlock(self, hold_time: float = 10.0) -> bool:
+        return self.unlock_and_release(hold_time=hold_time)
+
+    def unlock_and_release(self, hold_time: float = 10.0) -> bool:
+        if not self.device:
+            self._setup_gpio()
+            
         try:
-            self.logger.info(f"🔑 Hardware Action: Releasing door latch actuator...")
+            # 1. Door Unlocks on Authorized Input
+            self.logger.info("🔑 [AUTHORIZED TRIGGER] Match Found. Opening lock... Relay ON")
+            self.device.on()  
             
-            # Active Low Relay: Low (0) turns the relay ON (Unlocks the door)
-            GPIO.output(self.lock_pin, GPIO.LOW)
-            
-            # Keep the door open for the user to pass through
+            # 2. Strict Hold Time
+            self.logger.info(f"⌛ Keeping door unlocked for exactly {hold_time} seconds...")
             sleep(hold_time)
             
-            # Relock automatically
-            GPIO.output(self.lock_pin, GPIO.HIGH)
-            self.logger.info("🔒 Hardware Action: Latch engaged. Door Relocked safely.")
-            return True
+            # 3. Forcing Absolute Lock Release
+            self.logger.info("🔒 [HOLD TIME EXPIRED] Cutting off pulse... Relay OFF")
+            self.device.off()   
             
+            # Note: close() nahi call karenge taake state floating na ho aur logic lock rahe
+            self.logger.info("🔒 System returned to standing lock position.")
+            return True
         except Exception as e:
-            self.logger.error(f"Hardware breakdown during lock actuation layer: {e}")
-            # Safety fallback: attempt to relock in case of code mid-crash
-            GPIO.output(self.lock_pin, GPIO.HIGH)
+            self.logger.error(f"Error during actuation layer: {e}")
+            if self.device:
+                self.device.off()
             return False
 
     def cleanup(self):
-        """
-        Explicitly releases the GPIO pin allocations back to the kernel.
-        """
         try:
-            GPIO.cleanup(self.lock_pin)
-            self.logger.info(f"GPIO Pin {self.lock_pin} released safely via teardown routine.")
-        except Exception as e:
-            self.logger.error(f"Error executing GPIO pin cleanup: {e}")
+            if self.device:
+                self.device.off()
+                self.device.close()
+        except:
+            pass
 
-    # Context Manager support for 'with' blocks inside main.py
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
+# =========================================================================
+# PRODUCTION STANDBY APPLICATION TEST BENCH
+# =========================================================================
+if __name__ == "__main__":
+    import sys
+    print("==========================================================")
+    print("         🔒 SYSTEM DRIVER BASELINE INTERACTION            ")
+    print("==========================================================")
+    
+    lock = MagneticLock(pin=17)
+    print("\n--- System Standing By. Use Main App or press Enter to test ---")
+    
+    try:
+        while True:
+            input("\n[STANDBY] Press ENTER to trigger 10-second authorized access...")
+            lock.unlock_and_release(hold_time=10.0)
+    except KeyboardInterrupt:
+        print("\nExiting cleanly...")
+    finally:
+        lock.cleanup()

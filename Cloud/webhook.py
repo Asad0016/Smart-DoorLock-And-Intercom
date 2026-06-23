@@ -4,6 +4,7 @@ Handles Supabase routing requests, token verification, and sequential model retr
 """
 
 import threading
+from config import WEBHOOK_SECRET
 from flask import Flask, jsonify, request
 from Cloud.AlertManager import AlertManager
 from software.FaceDetection import ModelTraining
@@ -107,10 +108,44 @@ def build_webhook_app(alert_mgr: AlertManager, model: ModelTraining, smart_train
             return jsonify({"status": "success", "message": "Intercom stream teardown executed safely."}), 200
 
         return jsonify({"status": "error", "message": "Unknown command context"}), 400
+    @app.route("/set-pin", methods=["POST"])
+    def set_pin_trigger():
+        incoming_secret = request.headers.get("X-Gateway-Secret", "")
+        if incoming_secret != webhook_secret:
+            return jsonify({"error": "Unauthorized"}), 401
 
+        data = request.get_json(force=True, silent=True) or {}
+        
+        # Pure object ko bhejhein taake handle_local_pin_schedule 'record' ko parse kar sakay
+        success = alert_mgr.update_local_pin_schedule(data)
+        
+        if success:
+            return jsonify({"status": "success", "message": "Keypad set_pin function triggered."}), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to update keypad pin."}), 500
+    @app.route("/sync-rfid", methods=["POST"])
+    def sync_rfid_trigger():
+        # Security Key Check
+        incoming_secret = request.headers.get("X-Gateway-Secret", "")
+        if incoming_secret != webhook_secret:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        # Edge function ka banaya hua payload extract karna
+        payload = request.get_json(force=True, silent=True) or {}
+        
+        # AlertManager ke function ko poora payload pass karein
+        success = alert_mgr.update_local_rfid_cache(payload)
+        if success:
+            return jsonify({
+                "status": "success", 
+                "message": "RFID manager cache updated successfully."
+            }), 200
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": "Failed to inject RFID card into hardware layer."
+            }), 500
     return app
-
-
 def start_webhook_server(alert_mgr: AlertManager, model: ModelTraining, smart_train_func, host: str, port: int, secret: str) -> None:
     """
     Spawns the Flask webhook server runner context inside a non-blocking background daemon thread.
